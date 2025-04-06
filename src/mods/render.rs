@@ -53,14 +53,16 @@ impl Scene {
                 // We then take the closest intersection
                 if let Some(inter) = closest_intersection {
                     let mut final_color = ColorRBG::BLACK;
+                    let bias = 1e-4; // introduced to avoid self intersection (BUG #1)
 
                     // We go trough all the lights, casting a ray from the intersection point to the light
                     for light in &self.lights {
+                        let light_origin = inter.point + bias * inter.normal;
                         let light_direction = (light.transform.get_pos() - inter.point).normalize();
-                        let light_ray = Ray::new(inter.point, light_direction);
+                        let light_ray = Ray::new(light_origin, light_direction);
 
                         let is_lighten = !self.objects.iter().any(|object| {
-                            matches!(object.intersect(&light_ray), Some(intersection) if intersection.distance > 0.0)
+                            matches!(object.intersect(&light_ray), Some(intersection) if intersection.distance > bias)
                         });
 
                         // If not, we calculate the light with Phong model

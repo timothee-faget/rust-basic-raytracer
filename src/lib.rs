@@ -31,7 +31,7 @@ pub fn basic_ray_tracing() {
 
     let lights: Vec<Light> = vec![
         Light::new(Vect3::new(0.5, 0.5, 10.0), ColorRBG::WHITE),
-        // Light::new(Vect3::new(-5.0, -5.0, 7.0), ColorRBG::WHITE),
+        Light::new(Vect3::new(-5.0, -5.0, 7.0), ColorRBG::WHITE),
     ];
 
     let mut scene = Scene::new(camera, objects, lights);

@@ -102,14 +102,12 @@ impl Object3D for Sphere {
 
         let (t1, t2) = solve_quadratic(a, b, c)?;
 
-        let _distance = match (t1 >= 0.0, t2 >= 0.0) {
+        let distance = match (t1 >= 0.0, t2 >= 0.0) {
             (true, true) => t1.min(t2),
             (true, false) => t1,
             (false, true) => t2,
             (false, false) => return None,
         };
-
-        let distance = t1.min(t2);
 
         let point = ray.start + distance * ray.direction;
         let normal = (point - self.transform.get_pos()).normalize();
