@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
 
 use super::{
-    camera::Ray,
     color::ColorRBG,
+    funcs::solve_quadratic,
     position::{Quat, Transform, Vect3},
+    render::Ray,
 };
 
 // Intersection stuff
@@ -99,28 +100,20 @@ impl Object3D for Sphere {
         let c = (ray.start - self.transform.get_pos()) * (ray.start - self.transform.get_pos())
             - self.radius * self.radius;
 
-        let delta = b * b - 4.0 * a * c;
+        let (t1, t2) = solve_quadratic(a, b, c)?;
 
-        if delta < 0.0 {
-            None
-        } else if delta == 0.0 {
-            let distance = -b / (2.0 * a);
-            let point = ray.start + distance * ray.direction;
-            let normal = (point - self.transform.get_pos()).normalize();
-            Some(Intersection::new(distance, self.color, point, normal))
-        } else {
-            // TODO: Y'a probablement moyen de faire mieux ici
-            let distance = [(-b + delta.sqrt()) / 2.0 * a, (-b - delta.sqrt()) / 2.0 * a];
-            if distance[0] < distance[1] {
-                let point = ray.start + distance[0] * ray.direction;
-                let normal = (point - self.transform.get_pos()).normalize();
-                Some(Intersection::new(distance[0], self.color, point, normal))
-            } else {
-                let point = ray.start + distance[1] * ray.direction;
-                let normal = (point - self.transform.get_pos()).normalize();
-                Some(Intersection::new(distance[1], self.color, point, normal))
-            }
-        }
+        let _distance = match (t1 >= 0.0, t2 >= 0.0) {
+            (true, true) => t1.min(t2),
+            (true, false) => t1,
+            (false, true) => t2,
+            (false, false) => return None,
+        };
+
+        let distance = t1.min(t2);
+
+        let point = ray.start + distance * ray.direction;
+        let normal = (point - self.transform.get_pos()).normalize();
+        Some(Intersection::new(distance, self.color, point, normal))
     }
 
     fn get_color(&self) -> (f64, f64, f64) {

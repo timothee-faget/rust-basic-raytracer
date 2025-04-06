@@ -1,7 +1,5 @@
-use ray_tracer::basic_3d_sphere;
+use ray_tracer::basic_ray_tracing;
 
 fn main() {
-    // create_basic_text_image();
-
-    basic_3d_sphere();
+    basic_ray_tracing();
 }
