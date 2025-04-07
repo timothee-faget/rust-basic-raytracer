@@ -4,9 +4,8 @@ use std::io::prelude::*;
 
 use super::{
     color::ColorRBG,
-    funcs::Angle,
     objs::Object3D,
-    position::{Quat, Transform, Vect3},
+    position::{Angle, Quat, Transform, Vect3},
 };
 
 // Scene stuff
@@ -26,7 +25,7 @@ impl Scene {
         }
     }
 
-    pub fn render(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
+    pub fn render(&mut self) {
         let camera_pos = self.camera.transform.get_pos();
 
         let camera_axis = (
@@ -76,6 +75,11 @@ impl Scene {
             }
         }
 
+        // self.camera.image.save_as_file(filename)?;
+        // Ok(())
+    }
+
+    pub fn save_image(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
         self.camera.image.save_as_file(filename)?;
         Ok(())
     }
@@ -83,6 +87,7 @@ impl Scene {
 
 // Camera stuff
 
+#[derive(Clone)]
 pub struct Camera {
     transform: Transform,
     focal: f64,
@@ -117,7 +122,7 @@ impl Camera {
     }
 
     fn get_ray_direction(&self, camera_axis: (Vect3, Vect3, Vect3), x: usize, y: usize) -> Vect3 {
-        let w = 2.0 * (self.fov.get() / 2.0).tan() * self.focal;
+        let w = 2.0 * (self.fov / 2.0).tan() * self.focal;
         let h = (self.image.get_height() as f64 / self.image.get_width() as f64) * w;
         let alpha = w / (self.image.get_width() as f64);
         let coeff_a = -(x as f64) * alpha + w / 2.0;
@@ -169,6 +174,7 @@ impl Ray {
 
 // Image stuff
 
+#[derive(Clone)]
 pub struct ImageRGB {
     data: Vec<Vec<(u8, u8, u8)>>,
 }

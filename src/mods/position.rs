@@ -1,7 +1,6 @@
 use core::f64;
-use std::ops::{Add, Mul, Sub};
-
-use super::funcs::Angle;
+use core::f64::consts::PI;
+use std::ops::{Add, Div, Mul, Sub};
 
 // Vectors
 
@@ -167,6 +166,10 @@ pub struct Quat {
 }
 
 impl Quat {
+    pub fn new(w: f64, v: Vect3) -> Quat {
+        Quat { w, v }
+    }
+
     pub fn identity() -> Self {
         Quat {
             w: 1.0,
@@ -282,6 +285,71 @@ impl Transform {
 
     pub fn get_z_axis(&self) -> Vect3 {
         self.rotation.rotate(Vect3::FORWARD)
+    }
+}
+
+// Angle Stuff
+
+#[derive(Clone, Copy)]
+pub struct Angle {
+    value: f64,
+}
+
+impl Angle {
+    pub fn new(value: f64) -> Angle {
+        Angle { value }
+    }
+
+    pub fn from_deg(value_deg: f64) -> Angle {
+        Angle {
+            value: value_deg * PI / 180.0,
+        }
+    }
+
+    pub fn get(&self) -> f64 {
+        self.value
+    }
+
+    pub fn cos(&self) -> f64 {
+        self.value.cos()
+    }
+
+    pub fn sin(&self) -> f64 {
+        self.value.sin()
+    }
+
+    pub fn tan(&self) -> f64 {
+        self.value.tan()
+    }
+}
+
+impl Div<f64> for Angle {
+    type Output = Angle;
+
+    fn div(self, rhs: f64) -> Self::Output {
+        Self {
+            value: self.value / rhs,
+        }
+    }
+}
+
+impl Mul<f64> for Angle {
+    type Output = Angle;
+
+    fn mul(self, rhs: f64) -> Angle {
+        Self {
+            value: self.value * rhs,
+        }
+    }
+}
+
+impl Mul<Angle> for f64 {
+    type Output = Angle;
+
+    fn mul(self, rhs: Angle) -> Angle {
+        Angle {
+            value: self * rhs.value,
+        }
     }
 }
 

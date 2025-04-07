@@ -5,6 +5,12 @@ For now, it allows you to place spheres in 3D space and render them, with lights
 
 ## Changelog
 
+### v0.2.0
+
+- Ajout Parser et Tokeniser
+- Ajout de tests de performance automatique
+- Amélioration de la gestion des Angles
+
 ### v0.1.1
 
 - Suppression de fichiers inutilisés.
