@@ -1,0 +1,88 @@
+# Camera
+camera {
+    position: 0.0 0.0 20.0
+    rotation: 0.0 0.0 1.0 0.0  # quaternion wxyz
+    focal_length: 5.0
+    fov: 40.0
+    resolution: 3840 2160
+}
+
+# Lights
+light {
+    position: 0.0 4.0 5.0
+    color: 1.0 1.0 1.0
+}
+
+#light {
+#    position: 4.5 5.0 5.0
+#    color: 1.0 1.0 0.0
+#}
+
+# light {
+#    position: -1.5 5.0 5.0
+#    color: 1.0 0.0 1.0
+#}
+
+#light {
+#    position: -4.5 5.0 5.0
+#    color: 1.0 1.0 0.0
+#}
+
+# Materials 
+material {
+  name: mat_1
+  ambient: 0.4 0.0 0.0
+  diffuse: 1.0 0.0 0.0
+  specular: 0.5 0.5 0.5
+  shininess: 5
+}
+
+material {
+  name: mat_2
+  ambient: 0.4 0.0 0.0
+  diffuse: 1.0 0.0 0.0
+  specular: 1.0 1.0 1.0
+  shininess: 20
+}
+
+
+material {
+  name: mat_3
+  ambient: 0.4 0.0 0.0
+  diffuse: 1.0 0.0 0.0
+  specular: 1.0 1.0 1.0
+  shininess: 40
+}
+
+material {
+  name: mat_4
+  ambient: 0.4 0.0 0.0
+  diffuse: 1.0 0.0 0.0
+  specular: 1.0 1.0 1.0 
+  shininess: 70
+}
+
+# Spheres
+sphere {
+    position: 1.5 0.0 0.0
+    radius: 1.0
+    mat: mat_3
+}
+
+sphere {
+    position: 4.5 0.0 0.0
+    radius: 1.0
+    mat: mat_4
+}
+
+sphere {
+    position: -1.5 0.0 0.0
+    radius: 1.0
+    mat: mat_2
+}
+
+sphere {
+    position: -4.5 0.0 0.0
+    radius: 1.0
+    mat: mat_1
+}

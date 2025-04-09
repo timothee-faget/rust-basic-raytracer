@@ -1,6 +1,6 @@
 /target
 *.ppm
 *.pbm
-# *.svg
+*.svg
 /old
 /perf/*.txt

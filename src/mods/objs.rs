@@ -4,7 +4,7 @@ use super::{
     color::ColorRBG,
     funcs::solve_quadratic,
     position::{Quat, Transform, Vect3},
-    render::Ray,
+    render::{Material, Ray},
 };
 
 // Intersection stuff
@@ -12,16 +12,16 @@ use super::{
 #[derive(Debug)]
 pub struct Intersection {
     pub distance: f64,
-    pub color: ColorRBG,
+    pub material: Material,
     pub point: Vect3,
     pub normal: Vect3,
 }
 
 impl Intersection {
-    pub fn new(distance: f64, color: ColorRBG, point: Vect3, normal: Vect3) -> Intersection {
+    pub fn new(distance: f64, material: Material, point: Vect3, normal: Vect3) -> Intersection {
         Intersection {
             distance,
-            color,
+            material,
             point,
             normal,
         }
@@ -81,14 +81,16 @@ pub struct Sphere {
     transform: Transform,
     radius: f64,
     color: ColorRBG,
+    material: Material,
 }
 
 impl Sphere {
-    pub fn new(position: Vect3, radius: f64, color: ColorRBG) -> Sphere {
+    pub fn new(position: Vect3, radius: f64, color: ColorRBG, material: Material) -> Sphere {
         Sphere {
             transform: Transform::new(position, Quat::identity()),
             radius,
             color,
+            material,
         }
     }
 }
@@ -111,7 +113,7 @@ impl Object3D for Sphere {
 
         let point = ray.start + distance * ray.direction;
         let normal = (point - self.transform.get_pos()).normalize();
-        Some(Intersection::new(distance, self.color, point, normal))
+        Some(Intersection::new(distance, self.material, point, normal))
     }
 
     fn get_color(&self) -> (f64, f64, f64) {

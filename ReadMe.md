@@ -5,6 +5,18 @@ For now, it allows you to place spheres in 3D space and render them, with lights
 
 ## Changelog
 
+### v0.3.0
+
+- Ajout d'une structure matériau. Prise en compte dans le parser.
+- Prise en charge des parties ambiante et spéculaire du modèle de Phong.
+- Ajout d'un test de la vitesse de sauvegarde.
+
+
+#### Bugfixes
+
+- [#4] : Démarcation en tangence d'une sphère. Il y avait des couleurs négative, elles sont maintenant clampées. 
+
+
 ### v0.2.0
 
 - Ajout Parser et Tokeniser

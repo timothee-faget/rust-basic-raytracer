@@ -81,9 +81,9 @@ impl Add for ColorRBG {
 
     fn add(self, other: ColorRBG) -> Self::Output {
         ColorRBG {
-            r: (self.r + other.r).min(1.0),
-            g: (self.g + other.g).min(1.0),
-            b: (self.b + other.b).min(1.0),
+            r: (self.r + other.r).clamp(0.0, 1.0),
+            g: (self.g + other.g).clamp(0.0, 1.0),
+            b: (self.b + other.b).clamp(0.0, 1.0),
         }
     }
 }
@@ -105,9 +105,9 @@ impl Mul<ColorRBG> for f64 {
 
     fn mul(self, other: ColorRBG) -> Self::Output {
         ColorRBG {
-            r: self * other.r,
-            g: self * other.g,
-            b: self * other.b,
+            r: (self * other.r).clamp(0.0, 1.0),
+            g: (self * other.g).clamp(0.0, 1.0),
+            b: (self * other.b).clamp(0.0, 1.0),
         }
     }
 }

@@ -4,7 +4,7 @@ use super::{
     color::ColorRBG,
     objs::{Object3D, Sphere},
     position::{Angle, Quat, Vect3},
-    render::{Camera, Light, Scene},
+    render::{Camera, Light, Material, Scene},
 };
 
 // Tokeneiser stuff
@@ -23,6 +23,7 @@ enum Token {
 
 pub struct Parser {
     tokens: Vec<Token>,
+    materials: Vec<(String, Material)>,
     pos: usize,
 }
 
@@ -30,6 +31,7 @@ impl Parser {
     pub fn new(filename: &str) -> Parser {
         let mut parser = Parser {
             tokens: vec![],
+            materials: vec![],
             pos: 0,
         };
         // TODO : Ajouter une gestion des erreurs plus solide
@@ -130,6 +132,11 @@ impl Parser {
                 Token::Identifier(name) if name == "camera" => {
                     self.next(); // consume identifier
                     cameras.push(self.parse_camera());
+                }
+                Token::Identifier(name) if name == "material" => {
+                    self.next();
+                    let material = self.parse_material();
+                    self.materials.push(material);
                 }
                 Token::Identifier(name) if name == "light" => {
                     self.next();
@@ -236,6 +243,13 @@ impl Parser {
         Angle::from_deg(self.parse_number())
     }
 
+    fn parse_string(&mut self) -> String {
+        match self.next() {
+            Some(Token::Identifier(name)) => String::from(name),
+            other => panic!("Expected material name, got {:?}", other),
+        }
+    }
+
     fn parse_light(&mut self) -> Light {
         self.expect(&Token::LBrace);
         let mut position = Vect3::ZERO;
@@ -267,11 +281,59 @@ impl Parser {
         Light::new(position, color)
     }
 
+    fn parse_material(&mut self) -> (String, Material) {
+        self.expect(&Token::LBrace);
+        let mut name = String::new();
+        let mut ambient = ColorRBG::BLACK;
+        let mut diffuse = ColorRBG::BLACK;
+        let mut specular = ColorRBG::BLACK;
+        let mut shininess = 30.0;
+        while let Some(token) = self.peek() {
+            match token {
+                Token::Identifier(n) if n == "name" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    name = self.parse_string();
+                }
+                Token::Identifier(name) if name == "ambient" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    ambient = self.parse_color();
+                }
+                Token::Identifier(name) if name == "diffuse" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    diffuse = self.parse_color();
+                }
+                Token::Identifier(name) if name == "specular" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    specular = self.parse_color();
+                }
+                Token::Identifier(name) if name == "shininess" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    shininess = self.parse_number();
+                }
+                Token::RBrace => {
+                    self.next();
+                    break;
+                }
+                Token::Newline => {
+                    self.next();
+                }
+                _ => panic!("Unexpected token in material block: {:?}", token),
+            }
+        }
+
+        (name, Material::new(ambient, diffuse, specular, shininess))
+    }
+
     fn parse_sphere(&mut self) -> Sphere {
         self.expect(&Token::LBrace);
         let mut position = Vect3::ZERO;
         let mut radius = 0.0;
-        let mut color = ColorRBG::BLACK;
+        let mut name = String::new();
 
         while let Some(token) = self.peek() {
             match token {
@@ -285,10 +347,11 @@ impl Parser {
                     self.expect(&Token::Colon);
                     radius = self.parse_number();
                 }
-                Token::Identifier(name) if name == "color" => {
+                Token::Identifier(n) if n == "mat" => {
                     self.next();
                     self.expect(&Token::Colon);
-                    color = self.parse_color();
+                    name = self.parse_string();
+                    //color = self.parse_color();
                 }
                 Token::RBrace => {
                     self.next();
@@ -301,6 +364,22 @@ impl Parser {
             }
         }
 
-        Sphere::new(position, radius, color)
+        if let Some(material) = self
+            .materials
+            .iter()
+            .find(|(mat_name, _)| *mat_name == *name)
+            .map(|(_, mat)| mat)
+        {
+            Sphere::new(position, radius, ColorRBG::BLUE, *material)
+        } else {
+            let material = Material::new(
+                0.3 * ColorRBG::WHITE,
+                ColorRBG::WHITE,
+                1.0 * ColorRBG::WHITE,
+                33.0,
+            );
+            println!("Matériau introuvable");
+            Sphere::new(position, radius, ColorRBG::BLUE, material)
+        }
     }
 }

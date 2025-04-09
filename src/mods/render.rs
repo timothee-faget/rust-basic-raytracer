@@ -27,6 +27,7 @@ impl Scene {
 
     pub fn render(&mut self) {
         let camera_pos = self.camera.transform.get_pos();
+        let ambient_color = self.get_ambient_color();
 
         let camera_axis = (
             self.camera.transform.get_x_axis(),
@@ -36,7 +37,6 @@ impl Scene {
 
         for x in 0..self.camera.image.get_width() {
             for y in 0..self.camera.image.get_height() {
-                // We first cast a ray from the camera trough the pixel
                 let ray = Ray::new(camera_pos, self.camera.get_ray_direction(camera_axis, x, y));
 
                 let closest_intersection = self
@@ -49,34 +49,61 @@ impl Scene {
                             .unwrap_or(std::cmp::Ordering::Equal)
                     });
 
-                // We then take the closest intersection
                 if let Some(inter) = closest_intersection {
                     let mut final_color = ColorRBG::BLACK;
                     let bias = 1e-4; // introduced to avoid self intersection (BUG #1)
 
-                    // We go trough all the lights, casting a ray from the intersection point to the light
                     for light in &self.lights {
+                        // DIFFUSE PART
                         let light_origin = inter.point + bias * inter.normal;
                         let light_direction = (light.transform.get_pos() - inter.point).normalize();
                         let light_ray = Ray::new(light_origin, light_direction);
+
+                        // SPECULAR PART
+                        let reflect_direction =
+                            (2.0 * (light_direction * inter.normal) * inter.normal
+                                - light_direction)
+                                .normalize();
+                        let viewer_direction = (camera_pos - inter.point).normalize();
 
                         let is_lighten = !self.objects.iter().any(|object| {
                             matches!(object.intersect(&light_ray), Some(intersection) if intersection.distance > bias)
                         });
 
-                        // If not, we calculate the light with Phong model
                         if is_lighten {
                             final_color = final_color
-                                + ((light_direction * inter.normal) * light.color * inter.color);
+                                + ((light_direction * inter.normal)
+                                    * light.color
+                                    * inter.material.diffuse)
+                                + ((reflect_direction * viewer_direction)
+                                    .powf(inter.material.shininess)
+                                    * light.color
+                                    * inter.material.specular);
                         }
                     }
+
+                    let values = final_color.get_value();
+                    if values.0 < 0.0 || values.1 < 0.0 || values.2 < 0.0 {
+                        println!("Attention couleur non valide !!");
+                    }
+
+                    // AMBIENT PART
+                    final_color = final_color + (ambient_color * inter.material.ambient);
+
                     self.camera.image.set_pixel(x, y, final_color.rgb());
                 }
             }
         }
+    }
 
-        // self.camera.image.save_as_file(filename)?;
-        // Ok(())
+    pub fn get_ambient_color(&self) -> ColorRBG {
+        let mut ambient_color = ColorRBG::WHITE;
+
+        for light in &self.lights {
+            ambient_color = ambient_color * light.color;
+        }
+
+        ambient_color // Changer ce coeff
     }
 
     pub fn save_image(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
@@ -128,6 +155,43 @@ impl Camera {
         let coeff_a = -(x as f64) * alpha + w / 2.0;
         let coeff_b = -(y as f64) * alpha + h / 2.0;
         (coeff_a * camera_axis.0 + coeff_b * camera_axis.1 + self.focal * camera_axis.2).normalize()
+    }
+}
+
+// Material stuff
+
+#[derive(Debug, Clone, Copy)]
+pub struct Material {
+    ambient: ColorRBG,
+    diffuse: ColorRBG,
+    specular: ColorRBG,
+    shininess: f64,
+}
+
+impl Material {
+    pub fn new(ambient: ColorRBG, diffuse: ColorRBG, specular: ColorRBG, shininess: f64) -> Self {
+        Material {
+            ambient,
+            diffuse,
+            specular,
+            shininess,
+        }
+    }
+
+    pub fn get_amb(&self) -> ColorRBG {
+        self.ambient
+    }
+
+    pub fn get_dif(&self) -> ColorRBG {
+        self.diffuse
+    }
+
+    pub fn get_spe(&self) -> ColorRBG {
+        self.specular
+    }
+
+    pub fn get_shi(&self) -> f64 {
+        self.shininess
     }
 }
 
