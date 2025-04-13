@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-declare -a TESTS=("benchmark_render_scene" "benchmark_parse_scene" "benchmark_save_scene")
+declare -a TESTS=("benchmark_render_scene" "benchmark_parse_scene" "benchmark_save_scene" "benchmark_triangles_render_1")
 TIMESTAMP=$(date +"%Y-%m-%d %H:%M")
 GIT_HASH=$(git rev-parse --short HEAD)
 mkdir -p perf

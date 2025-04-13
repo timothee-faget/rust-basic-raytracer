@@ -2,7 +2,7 @@ use std::{fs, vec};
 
 use super::{
     color::ColorRBG,
-    objs::{Object3D, Sphere},
+    objs::{Object3D, Plane, Sphere, Triangle},
     position::{Angle, Quat, Vect3},
     render::{Camera, Light, Material, Scene},
 };
@@ -29,6 +29,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(filename: &str) -> Parser {
+        println!("== Parsing file : {}", filename);
         let mut parser = Parser {
             tokens: vec![],
             materials: vec![],
@@ -145,6 +146,14 @@ impl Parser {
                 Token::Identifier(name) if name == "sphere" => {
                     self.next();
                     objects.push(Box::new(self.parse_sphere()));
+                }
+                Token::Identifier(name) if name == "plane" => {
+                    self.next();
+                    objects.push(Box::new(self.parse_plane()));
+                }
+                Token::Identifier(name) if name == "triangle" => {
+                    self.next();
+                    objects.push(Box::new(self.parse_triangle()));
                 }
                 Token::Newline => {
                     self.next();
@@ -370,7 +379,7 @@ impl Parser {
             .find(|(mat_name, _)| *mat_name == *name)
             .map(|(_, mat)| mat)
         {
-            Sphere::new(position, radius, ColorRBG::BLUE, *material)
+            Sphere::new(position, radius, *material)
         } else {
             let material = Material::new(
                 0.3 * ColorRBG::WHITE,
@@ -379,7 +388,121 @@ impl Parser {
                 33.0,
             );
             println!("Matériau introuvable");
-            Sphere::new(position, radius, ColorRBG::BLUE, material)
+            Sphere::new(position, radius, material)
+        }
+    }
+
+    fn parse_plane(&mut self) -> Plane {
+        self.expect(&Token::LBrace);
+        let mut point = Vect3::ZERO;
+        let mut normal = Vect3::ZERO;
+        let mut name = String::new();
+
+        while let Some(token) = self.peek() {
+            match token {
+                Token::Identifier(name) if name == "point" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    point = self.parse_vect3();
+                }
+                Token::Identifier(name) if name == "normal" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    normal = self.parse_vect3();
+                }
+                Token::Identifier(n) if n == "mat" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    name = self.parse_string();
+                    //color = self.parse_color();
+                }
+                Token::RBrace => {
+                    self.next();
+                    break;
+                }
+                Token::Newline => {
+                    self.next();
+                }
+                _ => panic!("Unexpected token in sphere block: {:?}", token),
+            }
+        }
+
+        if let Some(material) = self
+            .materials
+            .iter()
+            .find(|(mat_name, _)| *mat_name == *name)
+            .map(|(_, mat)| mat)
+        {
+            Plane::new(point, normal, *material)
+        } else {
+            let material = Material::new(
+                0.3 * ColorRBG::WHITE,
+                ColorRBG::WHITE,
+                1.0 * ColorRBG::WHITE,
+                33.0,
+            );
+            println!("Matériau introuvable");
+            Plane::new(point, normal, material)
+        }
+    }
+
+    fn parse_triangle(&mut self) -> Triangle {
+        self.expect(&Token::LBrace);
+        let mut point_1 = Vect3::ZERO;
+        let mut point_2 = Vect3::ZERO;
+        let mut point_3 = Vect3::ZERO;
+        let mut name = String::new();
+
+        while let Some(token) = self.peek() {
+            match token {
+                Token::Identifier(name) if name == "point_1" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    point_1 = self.parse_vect3();
+                }
+                Token::Identifier(name) if name == "point_2" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    point_2 = self.parse_vect3();
+                }
+                Token::Identifier(name) if name == "point_3" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    point_3 = self.parse_vect3();
+                }
+                Token::Identifier(n) if n == "mat" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    name = self.parse_string();
+                    //color = self.parse_color();
+                }
+                Token::RBrace => {
+                    self.next();
+                    break;
+                }
+                Token::Newline => {
+                    self.next();
+                }
+                _ => panic!("Unexpected token in sphere block: {:?}", token),
+            }
+        }
+
+        if let Some(material) = self
+            .materials
+            .iter()
+            .find(|(mat_name, _)| *mat_name == *name)
+            .map(|(_, mat)| mat)
+        {
+            Triangle::new(point_1, point_2, point_3, *material)
+        } else {
+            let material = Material::new(
+                0.3 * ColorRBG::WHITE,
+                ColorRBG::WHITE,
+                1.0 * ColorRBG::WHITE,
+                33.0,
+            );
+            println!("Matériau introuvable");
+            Triangle::new(point_1, point_2, point_3, material)
         }
     }
 }

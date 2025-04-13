@@ -4,7 +4,7 @@ use std::io::prelude::*;
 
 use super::{
     color::ColorRBG,
-    objs::Object3D,
+    objs::{Intersection, Object3D},
     position::{Angle, Quat, Transform, Vect3},
 };
 
@@ -26,8 +26,9 @@ impl Scene {
     }
 
     pub fn render(&mut self) {
+        println!("== Rendering scene");
         let camera_pos = self.camera.transform.get_pos();
-        let ambient_color = self.get_ambient_color();
+        //let ambient_color = self.get_ambient_color();
 
         let camera_axis = (
             self.camera.transform.get_x_axis(),
@@ -54,41 +55,41 @@ impl Scene {
                     let bias = 1e-4; // introduced to avoid self intersection (BUG #1)
 
                     for light in &self.lights {
-                        // DIFFUSE PART
-                        let light_origin = inter.point + bias * inter.normal;
-                        let light_direction = (light.transform.get_pos() - inter.point).normalize();
+                        let (light_origin, light_direction, light_distance) =
+                            get_light_info(light, &inter, bias);
+
                         let light_ray = Ray::new(light_origin, light_direction);
 
-                        // SPECULAR PART
-                        let reflect_direction =
-                            (2.0 * (light_direction * inter.normal) * inter.normal
-                                - light_direction)
-                                .normalize();
-                        let viewer_direction = (camera_pos - inter.point).normalize();
-
                         let is_lighten = !self.objects.iter().any(|object| {
-                            matches!(object.intersect(&light_ray), Some(intersection) if intersection.distance > bias)
+                            if let Some(intersection) = object.intersect(&light_ray) {
+                                intersection.distance > bias
+                                    && intersection.distance < light_distance
+                            } else {
+                                false
+                            }
                         });
 
                         if is_lighten {
+                            let (reflect_direction, viewer_direction) =
+                                get_specular_info(&inter, light_direction, camera_pos);
+
                             final_color = final_color
-                                + ((light_direction * inter.normal)
-                                    * light.color
-                                    * inter.material.diffuse)
+                                + get_distance_coef_dif(light_distance)
+                                    * ((light_direction * inter.normal)
+                                        * light.color
+                                        * inter.material.diffuse) // DIFFUSE PART
                                 + ((reflect_direction * viewer_direction)
                                     .powf(inter.material.shininess)
                                     * light.color
-                                    * inter.material.specular);
+                                    * inter.material.specular); // SPECULAR PART
                         }
-                    }
 
-                    let values = final_color.get_value();
-                    if values.0 < 0.0 || values.1 < 0.0 || values.2 < 0.0 {
-                        println!("Attention couleur non valide !!");
+                        // AMBIENT PART
+                        final_color = final_color
+                            + get_distance_coef_amb(light_distance)
+                                * light.color
+                                * inter.material.ambient;
                     }
-
-                    // AMBIENT PART
-                    final_color = final_color + (ambient_color * inter.material.ambient);
 
                     self.camera.image.set_pixel(x, y, final_color.rgb());
                 }
@@ -96,20 +97,44 @@ impl Scene {
         }
     }
 
-    pub fn get_ambient_color(&self) -> ColorRBG {
-        let mut ambient_color = ColorRBG::WHITE;
-
-        for light in &self.lights {
-            ambient_color = ambient_color * light.color;
-        }
-
-        ambient_color // Changer ce coeff
+    pub fn add_object(&mut self, object: Box<dyn Object3D>) {
+        self.objects.push(object);
     }
 
     pub fn save_image(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
+        println!("== Saving scene");
         self.camera.image.save_as_file(filename)?;
         Ok(())
     }
+}
+
+fn get_distance_coef_dif(d: f64) -> f64 {
+    1.0 / (0.002 * d * d + 0.05 * d + 1.0)
+}
+
+fn get_distance_coef_amb(d: f64) -> f64 {
+    1.0 / (2.0 * d * d + 2.0 * d + 1.0)
+}
+
+fn get_light_info(light: &Light, intersection: &Intersection, bias: f64) -> (Vect3, Vect3, f64) {
+    let light_origin = intersection.point + bias * intersection.normal;
+    let light_direction = (light.transform.get_pos() - intersection.point).normalize();
+    let light_distance = (light.get_pos() - intersection.point).norm();
+
+    (light_origin, light_direction, light_distance)
+}
+
+fn get_specular_info(
+    intersection: &Intersection,
+    light_direction: Vect3,
+    camera_pos: Vect3,
+) -> (Vect3, Vect3) {
+    let reflect_direction = (2.0 * (light_direction * intersection.normal) * intersection.normal
+        - light_direction)
+        .normalize();
+    let viewer_direction = (camera_pos - intersection.point).normalize();
+
+    (reflect_direction, viewer_direction)
 }
 
 // Camera stuff
