@@ -16,9 +16,7 @@ pub fn solve_quadratic(a: f64, b: f64, c: f64) -> Option<(f64, f64)> {
 }
 
 pub fn det_from_3_vects(vect_1: Vect3, vect_2: Vect3, vect_3: Vect3) -> f64 {
-    vect_1.x * (vect_2.y * vect_3.z - vect_2.z * vect_3.y)
-        - vect_1.y * (vect_2.x * vect_3.z - vect_2.z * vect_3.x)
-        + vect_1.z * (vect_2.x * vect_3.y - vect_2.y * vect_3.x)
+    vect_1 * (vect_2.prod(vect_3))
 }
 
 #[cfg(test)]

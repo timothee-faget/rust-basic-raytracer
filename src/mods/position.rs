@@ -255,6 +255,10 @@ impl Transform {
 
     // Setters
 
+    pub fn rotate(&mut self, rot: Quat) {
+        self.rotation = rot * self.rotation;
+    }
+
     pub fn rotate_around_x_axis_deg(&mut self, angle: f64) {
         let rot = Quat::from_axis_angle_deg(self.get_x_axis(), angle);
         self.rotation = rot * self.rotation;

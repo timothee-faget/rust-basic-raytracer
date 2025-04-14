@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use crate::mods::funcs::det_from_3_vects;
 
 use super::{
+    //color::ColorRBG,
     funcs::solve_quadratic,
     position::{Quat, Transform, Vect3},
     render::{Material, Ray},
@@ -76,6 +77,8 @@ impl PartialOrd for Intersection {
 
 pub trait Object3D {
     fn intersect(&self, ray: &Ray) -> Option<Intersection>;
+    fn rotate(&mut self, rotation: Quat);
+    fn print(&self);
 }
 
 // Sphere stuff
@@ -116,6 +119,18 @@ impl Object3D for Sphere {
         let normal = (point - self.transform.get_pos()).normalize();
         Some(Intersection::new(distance, self.material, point, normal))
     }
+
+    fn rotate(&mut self, rotation: Quat) {
+        self.transform.rotate(rotation);
+    }
+
+    fn print(&self) {
+        println!(
+            "Sphère de centre {:?} et de rayon {:?}",
+            self.transform.get_pos(),
+            self.radius
+        );
+    }
 }
 
 // Plane stuff
@@ -152,6 +167,17 @@ impl Object3D for Plane {
             None
         }
     }
+
+    fn rotate(&mut self, rotation: Quat) {
+        self.normal = rotation.rotate(self.normal)
+    }
+
+    fn print(&self) {
+        println!(
+            "Plan de point {:?} et de normale {:?}",
+            self.point, self.normal
+        );
+    }
 }
 
 // Triangle stuff
@@ -168,7 +194,7 @@ impl Triangle {
     pub fn new(point_1: Vect3, point_2: Vect3, point_3: Vect3, material: Material) -> Self {
         let vect_1 = point_2 - point_1;
         let vect_2 = point_3 - point_1;
-        let normal = vect_1.prod(vect_2).normalize();
+        let normal = vect_2.prod(vect_1).normalize();
         Self {
             point_1,
             normal,
@@ -211,4 +237,75 @@ impl Object3D for Triangle {
             None
         }
     }
+
+    fn rotate(&mut self, rotation: Quat) {}
+
+    fn print(&self) {
+        println!(
+            "Triangle de point {:?} et de normale {:?}",
+            self.point_1, self.normal
+        );
+    }
+}
+
+// Complex creators
+
+pub struct Cube {
+    transform: Transform,
+    triangles: Vec<Triangle>,
+}
+
+impl Cube {
+    pub fn new(position: Vect3, rotation: Quat, size: f64, material: Material) -> Self {
+        let mut triangles = vec![];
+
+        let point_1 = rotation.rotate(position);
+        let point_2 = rotation.rotate(position + size * Vect3::RIGHT);
+        let point_3 = rotation.rotate(position + size * (Vect3::RIGHT + Vect3::FORWARD));
+        let point_4 = rotation.rotate(position + size * Vect3::FORWARD);
+        let point_5 = rotation.rotate(position + size * Vect3::UP);
+        let point_6 = rotation.rotate(position + size * (Vect3::UP + Vect3::RIGHT));
+        let point_7 =
+            rotation.rotate(position + size * (Vect3::UP + Vect3::RIGHT + Vect3::FORWARD));
+        let point_8 = rotation.rotate(position + size * (Vect3::UP + Vect3::FORWARD));
+
+        triangles.push(Triangle::new(point_1, point_2, point_6, material)); // arrière
+        triangles.push(Triangle::new(point_1, point_6, point_5, material));
+
+        triangles.push(Triangle::new(point_2, point_3, point_7, material)); // droite
+        triangles.push(Triangle::new(point_2, point_7, point_6, material));
+
+        triangles.push(Triangle::new(point_3, point_4, point_8, material)); // avant
+        triangles.push(Triangle::new(point_3, point_8, point_7, material));
+
+        triangles.push(Triangle::new(point_4, point_1, point_5, material)); // gauche
+        triangles.push(Triangle::new(point_4, point_5, point_8, material));
+
+        triangles.push(Triangle::new(point_5, point_6, point_7, material)); // haut
+        triangles.push(Triangle::new(point_5, point_7, point_8, material));
+
+        triangles.push(Triangle::new(point_1, point_4, point_3, material)); // bas
+        triangles.push(Triangle::new(point_1, point_3, point_2, material));
+
+        Self {
+            transform: Transform::new(position, rotation),
+            triangles,
+        }
+    }
+}
+
+impl Object3D for Cube {
+    fn intersect(&self, ray: &Ray) -> Option<Intersection> {
+        self.triangles
+            .iter()
+            .filter_map(|triangle| triangle.intersect(ray))
+            .filter(|inter| inter.distance.is_finite() && inter.distance > 1e-5)
+            .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap())
+    }
+
+    fn print(&self) {
+        println!("Cube");
+    }
+
+    fn rotate(&mut self, rotation: Quat) {}
 }

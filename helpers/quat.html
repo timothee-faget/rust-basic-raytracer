@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Visualisation de Quaternions</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #e8e8e8;
+      display: flex;
+      height: 100vh;
+    }
+
+    #ui {
+      width: 320px;
+      padding: 20px;
+      background: #ffffff;
+      border-right: 1px solid #ccc;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      box-shadow: 4px 0 10px rgba(0, 0, 0, 0.05);
+    }
+
+    #ui h2 {
+      margin-top: 0;
+    }
+
+    #ui label {
+      font-weight: bold;
+    }
+
+    input[type="number"] {
+      width: 60px;
+      margin: 4px;
+      padding: 5px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 10px;
+      border: none;
+      background-color: #007bff;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    #info {
+      margin-top: 15px;
+      padding: 10px;
+      background: #f4f4f4;
+      font-family: monospace;
+      white-space: pre-wrap;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+
+    #scene-container {
+      flex-grow: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    canvas {
+      border-left: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+
+<div id="ui">
+  <h2>Visualisation de Quaternions</h2>
+
+  <div>
+    <label>Quaternion (x, y, z, w) :</label><br>
+    <input type="number" id="qx" step="0.01" value="0">
+    <input type="number" id="qy" step="0.01" value="0">
+    <input type="number" id="qz" step="0.01" value="0">
+    <input type="number" id="qw" step="0.01" value="1">
+  </div>
+
+  <button onclick="applyQuaternion()">Appliquer la rotation</button>
+
+  <div style="margin-top: 15px;">
+    <label>Exemples :</label><br>
+    <button onclick="setExample(90, 'x')">Rotation 90° autour de X</button>
+    <button onclick="setExample(90, 'y')">Rotation 90° autour de Y</button>
+    <button onclick="setExample(90, 'z')">Rotation 90° autour de Z</button>
+  </div>
+
+  <div style="margin-top: 15px;">
+    <label>Rotation par sliders (°) :</label><br>
+    X: <input type="range" id="sliderX" min="-180" max="180" value="0"><br>
+    Y: <input type="range" id="sliderY" min="-180" max="180" value="0"><br>
+    Z: <input type="range" id="sliderZ" min="-180" max="180" value="0">
+  </div>
+
+  <button onclick="toggleWireframe()">Basculer en fil de fer</button>
+
+  <div id="info"></div>
+</div>
+
+<div id="scene-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.156.1/build/three.min.js"></script>
+<script>
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, 800 / 600, 0.1, 1000);
+  camera.position.z = 5;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(800, 600);
+  document.getElementById('scene-container').appendChild(renderer.domElement);
+
+  let isWireframe = false;
+
+  function toggleWireframe() {
+    faceMaterials.forEach(mat => mat.wireframe = !isWireframe);
+    isWireframe = !isWireframe;
+  }
+
+  function createLabelTexture(text, bgColor = '#ffffff', textColor = '#000000') {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 40px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, size / 2, size / 2);
+
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  const faceData = [
+    { label: 'Right', color: '#ff9999' },
+    { label: 'Left', color: '#99ccff' },
+    { label: 'Top', color: '#99ff99' },
+    { label: 'Bottom', color: '#ffff99' },
+    { label: 'Front', color: '#ffcc99' },
+    { label: 'Back', color: '#cc99ff' }
+  ];
+
+  const faceMaterials = faceData.map(data =>
+    new THREE.MeshBasicMaterial({
+      map: createLabelTexture(data.label, data.color),
+      side: THREE.DoubleSide
+    })
+  );
+
+  const cube = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    faceMaterials
+  );
+
+  const arrowLength = 1.5;
+  const arrowX = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), arrowLength, 0xff0000);
+  const arrowY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), arrowLength, 0x00ff00);
+  const arrowZ = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), arrowLength, 0x0000ff);
+
+  const cubeGroup = new THREE.Group();
+  cubeGroup.add(cube, arrowX, arrowY, arrowZ);
+  scene.add(cubeGroup);
+
+  const axes = new THREE.AxesHelper(2);
+  scene.add(axes);
+
+  let startQuat = cube.quaternion.clone();
+  let endQuat = cube.quaternion.clone();
+  let isAnimating = false;
+  let t = 0;
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    if (isAnimating) {
+      t += 0.02;
+      if (t >= 1) {
+        t = 1;
+        isAnimating = false;
+      }
+      cube.quaternion.slerpQuaternions(startQuat, endQuat, t);
+    }
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  function applyQuaternion() {
+    const x = parseFloat(document.getElementById('qx').value);
+    const y = parseFloat(document.getElementById('qy').value);
+    const z = parseFloat(document.getElementById('qz').value);
+    const w = parseFloat(document.getElementById('qw').value);
+
+    const newQuat = new THREE.Quaternion(x, y, z, w).normalize();
+
+    startQuat = cube.quaternion.clone();
+    endQuat = newQuat.clone();
+    t = 0;
+    isAnimating = true;
+
+    const angle = 2 * Math.acos(newQuat.w);
+    const s = Math.sqrt(1 - newQuat.w * newQuat.w);
+    let axis = new THREE.Vector3(1, 0, 0);
+    if (s > 0.0001) {
+      axis.set(newQuat.x / s, newQuat.y / s, newQuat.z / s);
+    }
+
+    document.getElementById('info').innerText =
+      `Axe : (${axis.x.toFixed(2)}, ${axis.y.toFixed(2)}, ${axis.z.toFixed(2)})\n` +
+      `Angle : ${(angle * 180 / Math.PI).toFixed(1)}°`;
+  }
+
+  function setExample(degrees, axisName) {
+    const angleRad = THREE.MathUtils.degToRad(degrees);
+    let axis;
+    switch (axisName) {
+      case 'x': axis = new THREE.Vector3(1, 0, 0); break;
+      case 'y': axis = new THREE.Vector3(0, 1, 0); break;
+      case 'z': axis = new THREE.Vector3(0, 0, 1); break;
+    }
+    const quat = new THREE.Quaternion().setFromAxisAngle(axis, angleRad);
+
+    document.getElementById('qx').value = quat.x.toFixed(3);
+    document.getElementById('qy').value = quat.y.toFixed(3);
+    document.getElementById('qz').value = quat.z.toFixed(3);
+    document.getElementById('qw').value = quat.w.toFixed(3);
+
+    applyQuaternion();
+  }
+
+  const sliderX = document.getElementById('sliderX');
+  const sliderY = document.getElementById('sliderY');
+  const sliderZ = document.getElementById('sliderZ');
+
+  function updateRotationFromSliders() {
+    const rx = THREE.MathUtils.degToRad(parseFloat(sliderX.value));
+    const ry = THREE.MathUtils.degToRad(parseFloat(sliderY.value));
+    const rz = THREE.MathUtils.degToRad(parseFloat(sliderZ.value));
+
+    const euler = new THREE.Euler(rx, ry, rz, 'XYZ');
+    cubeGroup.quaternion.setFromEuler(euler);
+
+    const q = cubeGroup.quaternion;
+    document.getElementById('qx').value = q.x.toFixed(3);
+    document.getElementById('qy').value = q.y.toFixed(3);
+    document.getElementById('qz').value = q.z.toFixed(3);
+    document.getElementById('qw').value = q.w.toFixed(3);
+
+    const angle = 2 * Math.acos(q.w);
+    const s = Math.sqrt(1 - q.w * q.w);
+    let axis = new THREE.Vector3(1, 0, 0);
+    if (s > 0.0001) {
+      axis.set(q.x / s, q.y / s, q.z / s);
+    }
+    document.getElementById('info').innerText =
+      `Axe : (${axis.x.toFixed(2)}, ${axis.y.toFixed(2)}, ${axis.z.toFixed(2)})\n` +
+      `Angle : ${(angle * 180 / Math.PI).toFixed(1)}°`;
+  }
+
+  sliderX.addEventListener('input', updateRotationFromSliders);
+  sliderY.addEventListener('input', updateRotationFromSliders);
+  sliderZ.addEventListener('input', updateRotationFromSliders);
+</script>
+</body>
+</html>

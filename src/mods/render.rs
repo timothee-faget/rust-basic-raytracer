@@ -1,3 +1,4 @@
+use core::f64;
 use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
@@ -5,7 +6,7 @@ use std::io::prelude::*;
 use super::{
     color::ColorRBG,
     objs::{Intersection, Object3D},
-    position::{Angle, Quat, Transform, Vect3},
+    position::{self, Angle, Quat, Transform, Vect3},
 };
 
 // Scene stuff
@@ -13,11 +14,15 @@ use super::{
 pub struct Scene {
     camera: Camera,
     objects: Vec<Box<dyn Object3D>>,
-    lights: Vec<Light>,
+    lights: Vec<Box<dyn Light>>,
 }
 
 impl Scene {
-    pub fn new(camera: Camera, objects: Vec<Box<dyn Object3D>>, lights: Vec<Light>) -> Scene {
+    pub fn new(
+        camera: Camera,
+        objects: Vec<Box<dyn Object3D>>,
+        lights: Vec<Box<dyn Light>>,
+    ) -> Scene {
         Scene {
             camera,
             objects,
@@ -28,7 +33,6 @@ impl Scene {
     pub fn render(&mut self) {
         println!("== Rendering scene");
         let camera_pos = self.camera.transform.get_pos();
-        //let ambient_color = self.get_ambient_color();
 
         let camera_axis = (
             self.camera.transform.get_x_axis(),
@@ -52,43 +56,10 @@ impl Scene {
 
                 if let Some(inter) = closest_intersection {
                     let mut final_color = ColorRBG::BLACK;
-                    let bias = 1e-4; // introduced to avoid self intersection (BUG #1)
 
                     for light in &self.lights {
-                        let (light_origin, light_direction, light_distance) =
-                            get_light_info(light, &inter, bias);
-
-                        let light_ray = Ray::new(light_origin, light_direction);
-
-                        let is_lighten = !self.objects.iter().any(|object| {
-                            if let Some(intersection) = object.intersect(&light_ray) {
-                                intersection.distance > bias
-                                    && intersection.distance < light_distance
-                            } else {
-                                false
-                            }
-                        });
-
-                        if is_lighten {
-                            let (reflect_direction, viewer_direction) =
-                                get_specular_info(&inter, light_direction, camera_pos);
-
-                            final_color = final_color
-                                + get_distance_coef_dif(light_distance)
-                                    * ((light_direction * inter.normal)
-                                        * light.color
-                                        * inter.material.diffuse) // DIFFUSE PART
-                                + ((reflect_direction * viewer_direction)
-                                    .powf(inter.material.shininess)
-                                    * light.color
-                                    * inter.material.specular); // SPECULAR PART
-                        }
-
-                        // AMBIENT PART
-                        final_color = final_color
-                            + get_distance_coef_amb(light_distance)
-                                * light.color
-                                * inter.material.ambient;
+                        final_color =
+                            final_color + light.get_light(&inter, camera_pos, &self.objects);
                     }
 
                     self.camera.image.set_pixel(x, y, final_color.rgb());
@@ -99,6 +70,10 @@ impl Scene {
 
     pub fn add_object(&mut self, object: Box<dyn Object3D>) {
         self.objects.push(object);
+    }
+
+    pub fn add_light(&mut self, light: Box<dyn Light>) {
+        self.lights.push(light);
     }
 
     pub fn save_image(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
@@ -114,27 +89,6 @@ fn get_distance_coef_dif(d: f64) -> f64 {
 
 fn get_distance_coef_amb(d: f64) -> f64 {
     1.0 / (2.0 * d * d + 2.0 * d + 1.0)
-}
-
-fn get_light_info(light: &Light, intersection: &Intersection, bias: f64) -> (Vect3, Vect3, f64) {
-    let light_origin = intersection.point + bias * intersection.normal;
-    let light_direction = (light.transform.get_pos() - intersection.point).normalize();
-    let light_distance = (light.get_pos() - intersection.point).norm();
-
-    (light_origin, light_direction, light_distance)
-}
-
-fn get_specular_info(
-    intersection: &Intersection,
-    light_direction: Vect3,
-    camera_pos: Vect3,
-) -> (Vect3, Vect3) {
-    let reflect_direction = (2.0 * (light_direction * intersection.normal) * intersection.normal
-        - light_direction)
-        .normalize();
-    let viewer_direction = (camera_pos - intersection.point).normalize();
-
-    (reflect_direction, viewer_direction)
 }
 
 // Camera stuff
@@ -221,15 +175,23 @@ impl Material {
 }
 
 // Light stuff
+pub trait Light {
+    fn get_light(
+        &self,
+        inter: &Intersection,
+        camera_pos: Vect3,
+        objects: &Vec<Box<dyn Object3D>>,
+    ) -> ColorRBG;
+}
 
-pub struct Light {
+pub struct PointLight {
     transform: Transform,
     color: ColorRBG,
 }
 
-impl Light {
-    pub fn new(position: Vect3, color: ColorRBG) -> Light {
-        Light {
+impl PointLight {
+    pub fn new(position: Vect3, color: ColorRBG) -> Self {
+        Self {
             transform: Transform::new(position, Quat::identity()),
             color,
         }
@@ -241,6 +203,126 @@ impl Light {
 
     pub fn get_color(&self) -> ColorRBG {
         self.color
+    }
+}
+
+impl Light for PointLight {
+    fn get_light(
+        &self,
+        inter: &Intersection,
+        camera_pos: Vect3,
+        objects: &Vec<Box<dyn Object3D>>,
+    ) -> ColorRBG {
+        let bias = 1e-4;
+        let light_direction = (self.get_pos() - inter.point).normalize();
+        let light_distance = (self.get_pos() - inter.point).norm();
+        let light_ray = Ray::new(inter.point + bias * inter.normal, light_direction);
+
+        let mut final_color = ColorRBG::BLACK;
+
+        if !objects.iter().any(|object| {
+            if let Some(intersection) = object.intersect(&light_ray) {
+                intersection.distance > bias && intersection.distance < light_distance
+            } else {
+                false
+            }
+        }) {
+            let reflect_direction = (2.0 * (light_direction * inter.normal) * inter.normal
+                - light_direction)
+                .normalize();
+            let viewer_direction = (camera_pos - inter.point).normalize();
+
+            final_color = final_color
+                + get_distance_coef_dif(light_distance)
+                    * ((light_direction * inter.normal) * self.color * inter.material.diffuse)
+                + (reflect_direction * viewer_direction).powf(inter.material.shininess)
+                    * self.color
+                    * inter.material.specular; // SPECULAR PART
+        }
+        final_color + get_distance_coef_amb(light_distance) * self.color * inter.material.ambient
+    }
+}
+
+pub struct RectLight {
+    transform: Transform,
+    vect_1: Vect3,
+    vect_2: Vect3,
+    color: ColorRBG,
+}
+
+impl RectLight {
+    pub fn new(
+        position: Vect3,
+        rotation: Quat,
+        vect_1: Vect3,
+        vect_2: Vect3,
+        color: ColorRBG,
+    ) -> Self {
+        Self {
+            transform: Transform::new(position, rotation),
+            vect_1,
+            vect_2,
+            color,
+        }
+    }
+}
+
+impl Light for RectLight {
+    fn get_light(
+        &self,
+        inter: &Intersection,
+        camera_pos: Vect3,
+        objects: &Vec<Box<dyn Object3D>>,
+    ) -> ColorRBG {
+        let res = 10;
+        let grid: Vec<f64> = (0..res + 1).map(|i| i as f64 / (res as f64)).collect();
+        let coef = 1.0 / (res as f64 * res as f64);
+        //println!("{:?}", grid);
+
+        let mut final_color = ColorRBG::BLACK;
+        for i in &grid {
+            for j in &grid {
+                let ech_point = self.transform.get_pos() + self.vect_1 * *i + self.vect_2 * *j;
+                //println!("{:?}", ech_point);
+                let bias = 1e-4;
+                let light_direction = (ech_point - inter.point).normalize();
+                let light_distance = (ech_point - inter.point).norm();
+                let light_ray = Ray::new(inter.point + bias * inter.normal, light_direction);
+
+                if !objects.iter().any(|object| {
+                    if let Some(intersection) = object.intersect(&light_ray) {
+                        intersection.distance > bias && intersection.distance < light_distance
+                    } else {
+                        false
+                    }
+                }) {
+                    let reflect_direction = (2.0 * (light_direction * inter.normal) * inter.normal
+                        - light_direction)
+                        .normalize();
+                    let viewer_direction = (camera_pos - inter.point).normalize();
+
+                    final_color = final_color
+                        + 1.0
+                            * coef
+                            * (get_distance_coef_dif(light_distance)
+                                * ((light_direction * inter.normal)
+                                    * self.color
+                                    * inter.material.diffuse)
+                                + (reflect_direction * viewer_direction)
+                                    .powf(inter.material.shininess)
+                                    * self.color
+                                    * inter.material.specular); // SPECULAR PART
+                }
+                final_color = final_color
+                    + 5.0
+                        * coef
+                        * get_distance_coef_amb(light_distance)
+                        * self.color
+                        * inter.material.ambient;
+            }
+        }
+        //println!("{:?}", final_color);
+        final_color
     }
 }
 

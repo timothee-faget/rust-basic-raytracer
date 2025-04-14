@@ -5,6 +5,22 @@ For now, it allows you to place spheres in 3D space and render them, with lights
 
 ## Changelog
 
+### v0.4.0
+
+- Ajout de a gestion de plans
+- Ajout de la gestion de triangles
+- Prise en compte de la distance dans le calcul de la lumière ambiante
+- Prise en compte de la distance dans le calcul de la lumière diffuse
+- Ajout de tests
+- Réorganisation dans la boucle de rendu
+
+
+#### Bugfixes
+
+- [#5] : Zone d'ombre qui apparaissent avec plusiseurs plans. On prenait en compte des intersections plus loins que la lumière. 
+
+
+
 ### v0.3.0
 
 - Ajout d'une structure matériau. Prise en compte dans le parser.

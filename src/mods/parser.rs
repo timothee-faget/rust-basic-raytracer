@@ -2,9 +2,9 @@ use std::{fs, vec};
 
 use super::{
     color::ColorRBG,
-    objs::{Object3D, Plane, Sphere, Triangle},
+    objs::{Cube, Object3D, Plane, Sphere, Triangle},
     position::{Angle, Quat, Vect3},
-    render::{Camera, Light, Material, Scene},
+    render::{Camera, Light, Material, PointLight, Scene},
 };
 
 // Tokeneiser stuff
@@ -125,7 +125,7 @@ impl Parser {
 
     pub fn parse_scene(&mut self) -> Scene {
         let mut cameras: Vec<Camera> = vec![];
-        let mut lights: Vec<Light> = vec![];
+        let mut lights: Vec<Box<dyn Light>> = vec![];
         let mut objects: Vec<Box<dyn Object3D>> = vec![];
 
         while let Some(token) = self.peek() {
@@ -139,9 +139,9 @@ impl Parser {
                     let material = self.parse_material();
                     self.materials.push(material);
                 }
-                Token::Identifier(name) if name == "light" => {
+                Token::Identifier(name) if name == "point_light" => {
                     self.next();
-                    lights.push(self.parse_light());
+                    lights.push(Box::new(self.parse_light()));
                 }
                 Token::Identifier(name) if name == "sphere" => {
                     self.next();
@@ -154,6 +154,10 @@ impl Parser {
                 Token::Identifier(name) if name == "triangle" => {
                     self.next();
                     objects.push(Box::new(self.parse_triangle()));
+                }
+                Token::Identifier(name) if name == "cube" => {
+                    self.next();
+                    objects.push(Box::new(self.parse_cube()));
                 }
                 Token::Newline => {
                     self.next();
@@ -259,7 +263,7 @@ impl Parser {
         }
     }
 
-    fn parse_light(&mut self) -> Light {
+    fn parse_light(&mut self) -> PointLight {
         self.expect(&Token::LBrace);
         let mut position = Vect3::ZERO;
         let mut color = ColorRBG::BLACK;
@@ -287,7 +291,7 @@ impl Parser {
             }
         }
 
-        Light::new(position, color)
+        PointLight::new(position, color)
     }
 
     fn parse_material(&mut self) -> (String, Material) {
@@ -503,6 +507,66 @@ impl Parser {
             );
             println!("Matériau introuvable");
             Triangle::new(point_1, point_2, point_3, material)
+        }
+    }
+
+    fn parse_cube(&mut self) -> Cube {
+        self.expect(&Token::LBrace);
+        let mut position = Vect3::ZERO;
+        let mut rotation = Quat::identity();
+        let mut size = 0.0;
+        let mut name = String::new();
+
+        while let Some(token) = self.peek() {
+            match token {
+                Token::Identifier(name) if name == "position" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    position = self.parse_vect3();
+                }
+                Token::Identifier(name) if name == "rotation" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    rotation = self.parse_quat();
+                }
+                Token::Identifier(name) if name == "size" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    size = self.parse_number();
+                }
+                Token::Identifier(n) if n == "mat" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    name = self.parse_string();
+                    //color = self.parse_color();
+                }
+                Token::RBrace => {
+                    self.next();
+                    break;
+                }
+                Token::Newline => {
+                    self.next();
+                }
+                _ => panic!("Unexpected token in sphere block: {:?}", token),
+            }
+        }
+
+        if let Some(material) = self
+            .materials
+            .iter()
+            .find(|(mat_name, _)| *mat_name == *name)
+            .map(|(_, mat)| mat)
+        {
+            Cube::new(position, rotation, size, *material)
+        } else {
+            let material = Material::new(
+                0.3 * ColorRBG::WHITE,
+                ColorRBG::WHITE,
+                1.0 * ColorRBG::WHITE,
+                33.0,
+            );
+            println!("Matériau introuvable");
+            Cube::new(position, rotation, size, material)
         }
     }
 }
