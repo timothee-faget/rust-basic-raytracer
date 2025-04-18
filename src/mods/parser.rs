@@ -4,7 +4,7 @@ use super::{
     color::ColorRBG,
     objs::{Cube, Object3D, Plane, Sphere, Triangle},
     position::{Angle, Quat, Vect3},
-    render::{Camera, Light, Material, PointLight, Scene},
+    render::{Camera, Material, Scene},
 };
 
 // Tokeneiser stuff
@@ -125,7 +125,6 @@ impl Parser {
 
     pub fn parse_scene(&mut self) -> Scene {
         let mut cameras: Vec<Camera> = vec![];
-        let mut lights: Vec<Box<dyn Light>> = vec![];
         let mut objects: Vec<Box<dyn Object3D>> = vec![];
 
         while let Some(token) = self.peek() {
@@ -141,7 +140,7 @@ impl Parser {
                 }
                 Token::Identifier(name) if name == "point_light" => {
                     self.next();
-                    lights.push(Box::new(self.parse_light()));
+                    // lights.push(Box::new(self.parse_light()));
                 }
                 Token::Identifier(name) if name == "sphere" => {
                     self.next();
@@ -168,8 +167,8 @@ impl Parser {
             }
         }
 
-        Scene::new(cameras[0].clone(), objects, lights) // Il faudrait trouver un moyen de
-                                                        // supprimer le clone.
+        Scene::new(cameras[0].clone(), objects) // Il faudrait trouver un moyen de
+                                                // supprimer le clone.
     }
 
     fn parse_camera(&mut self) -> Camera {
@@ -263,44 +262,16 @@ impl Parser {
         }
     }
 
-    fn parse_light(&mut self) -> PointLight {
-        self.expect(&Token::LBrace);
-        let mut position = Vect3::ZERO;
-        let mut color = ColorRBG::BLACK;
-
-        while let Some(token) = self.peek() {
-            match token {
-                Token::Identifier(name) if name == "position" => {
-                    self.next();
-                    self.expect(&Token::Colon);
-                    position = self.parse_vect3();
-                }
-                Token::Identifier(name) if name == "color" => {
-                    self.next();
-                    self.expect(&Token::Colon);
-                    color = self.parse_color();
-                }
-                Token::RBrace => {
-                    self.next();
-                    break;
-                }
-                Token::Newline => {
-                    self.next();
-                }
-                _ => panic!("Unexpected token in light block: {:?}", token),
-            }
-        }
-
-        PointLight::new(position, color)
-    }
-
     fn parse_material(&mut self) -> (String, Material) {
         self.expect(&Token::LBrace);
         let mut name = String::new();
-        let mut ambient = ColorRBG::BLACK;
-        let mut diffuse = ColorRBG::BLACK;
-        let mut specular = ColorRBG::BLACK;
-        let mut shininess = 30.0;
+        let mut color = ColorRBG::BLACK;
+        let mut emission_color = ColorRBG::BLACK;
+        let mut specular_color = ColorRBG::BLACK;
+        let mut emission_strength = 0.0;
+        let mut smoothness = 0.0;
+        let mut specular_prob = 0.0;
+
         while let Some(token) = self.peek() {
             match token {
                 Token::Identifier(n) if n == "name" => {
@@ -308,25 +279,35 @@ impl Parser {
                     self.expect(&Token::Colon);
                     name = self.parse_string();
                 }
-                Token::Identifier(name) if name == "ambient" => {
+                Token::Identifier(name) if name == "color" => {
                     self.next();
                     self.expect(&Token::Colon);
-                    ambient = self.parse_color();
+                    color = self.parse_color();
                 }
-                Token::Identifier(name) if name == "diffuse" => {
+                Token::Identifier(name) if name == "emission_color" => {
                     self.next();
                     self.expect(&Token::Colon);
-                    diffuse = self.parse_color();
+                    emission_color = self.parse_color();
                 }
-                Token::Identifier(name) if name == "specular" => {
+                Token::Identifier(name) if name == "specular_color" => {
                     self.next();
                     self.expect(&Token::Colon);
-                    specular = self.parse_color();
+                    specular_color = self.parse_color();
                 }
-                Token::Identifier(name) if name == "shininess" => {
+                Token::Identifier(name) if name == "emission_strength" => {
                     self.next();
                     self.expect(&Token::Colon);
-                    shininess = self.parse_number();
+                    emission_strength = self.parse_number();
+                }
+                Token::Identifier(name) if name == "smoothness" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    smoothness = self.parse_number();
+                }
+                Token::Identifier(name) if name == "specular_prob" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    specular_prob = self.parse_number();
                 }
                 Token::RBrace => {
                     self.next();
@@ -339,7 +320,17 @@ impl Parser {
             }
         }
 
-        (name, Material::new(ambient, diffuse, specular, shininess))
+        (
+            name,
+            Material::new(
+                color,
+                emission_color,
+                specular_color,
+                emission_strength,
+                smoothness,
+                specular_prob,
+            ),
+        )
     }
 
     fn parse_sphere(&mut self) -> Sphere {
@@ -364,7 +355,6 @@ impl Parser {
                     self.next();
                     self.expect(&Token::Colon);
                     name = self.parse_string();
-                    //color = self.parse_color();
                 }
                 Token::RBrace => {
                     self.next();
@@ -389,7 +379,9 @@ impl Parser {
                 0.3 * ColorRBG::WHITE,
                 ColorRBG::WHITE,
                 1.0 * ColorRBG::WHITE,
-                33.0,
+                0.0,
+                0.0,
+                0.0,
             );
             println!("Matériau introuvable");
             Sphere::new(position, radius, material)
@@ -418,7 +410,6 @@ impl Parser {
                     self.next();
                     self.expect(&Token::Colon);
                     name = self.parse_string();
-                    //color = self.parse_color();
                 }
                 Token::RBrace => {
                     self.next();
@@ -443,7 +434,9 @@ impl Parser {
                 0.3 * ColorRBG::WHITE,
                 ColorRBG::WHITE,
                 1.0 * ColorRBG::WHITE,
-                33.0,
+                0.0,
+                0.0,
+                0.0,
             );
             println!("Matériau introuvable");
             Plane::new(point, normal, material)
@@ -478,7 +471,6 @@ impl Parser {
                     self.next();
                     self.expect(&Token::Colon);
                     name = self.parse_string();
-                    //color = self.parse_color();
                 }
                 Token::RBrace => {
                     self.next();
@@ -503,7 +495,9 @@ impl Parser {
                 0.3 * ColorRBG::WHITE,
                 ColorRBG::WHITE,
                 1.0 * ColorRBG::WHITE,
-                33.0,
+                0.0,
+                0.0,
+                0.0,
             );
             println!("Matériau introuvable");
             Triangle::new(point_1, point_2, point_3, material)
@@ -538,7 +532,6 @@ impl Parser {
                     self.next();
                     self.expect(&Token::Colon);
                     name = self.parse_string();
-                    //color = self.parse_color();
                 }
                 Token::RBrace => {
                     self.next();
@@ -563,7 +556,9 @@ impl Parser {
                 0.3 * ColorRBG::WHITE,
                 ColorRBG::WHITE,
                 1.0 * ColorRBG::WHITE,
-                33.0,
+                0.0,
+                0.0,
+                0.0,
             );
             println!("Matériau introuvable");
             Cube::new(position, rotation, size, material)

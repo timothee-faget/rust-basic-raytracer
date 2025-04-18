@@ -5,6 +5,13 @@ For now, it allows you to place spheres in 3D space and render them, with lights
 
 ## Changelog
 
+### v0.5.0
+
+- Changement de paradigme: passage à une simulation de rebonds de rayons aléatoires
+- Ajout du Cube au parser
+- Isolation des constantes
+
+
 ### v0.4.0
 
 - Ajout de a gestion de plans

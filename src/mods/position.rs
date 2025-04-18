@@ -16,6 +16,7 @@ impl Vect3 {
         Vect3 { x, y, z }
     }
 
+    #[inline]
     pub fn prod(self, other: Self) -> Self {
         Vect3 {
             x: self.y * other.z - self.z * other.y,
@@ -24,12 +25,19 @@ impl Vect3 {
         }
     }
 
+    #[inline]
     pub fn norm(&self) -> f64 {
         (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
     }
 
+    #[inline]
     pub fn normalize(&self) -> Vect3 {
         self * (1.0 / self.norm())
+    }
+
+    #[inline]
+    pub fn dot(&self, other: &Vect3) -> f64 {
+        self.x * other.x + self.y * other.y + self.z * other.z
     }
 
     // Defaults
@@ -80,7 +88,45 @@ impl PartialEq for Vect3 {
 impl Add for Vect3 {
     type Output = Vect3;
 
+    #[inline]
     fn add(self, other: Vect3) -> Vect3 {
+        Vect3 {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: self.z + other.z,
+        }
+    }
+}
+
+impl<'a> Add<Vect3> for &'a Vect3 {
+    type Output = Vect3;
+
+    #[inline]
+    fn add(self, other: Vect3) -> Vect3 {
+        Vect3 {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: self.z + other.z,
+        }
+    }
+}
+impl<'b> Add<&'b Vect3> for Vect3 {
+    type Output = Vect3;
+
+    #[inline]
+    fn add(self, other: &'b Vect3) -> Vect3 {
+        Vect3 {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: self.z + other.z,
+        }
+    }
+}
+impl<'a, 'b> Add<&'b Vect3> for &'a Vect3 {
+    type Output = Vect3;
+
+    #[inline]
+    fn add(self, other: &'b Vect3) -> Vect3 {
         Vect3 {
             x: self.x + other.x,
             y: self.y + other.y,
@@ -92,6 +138,7 @@ impl Add for Vect3 {
 impl Sub for Vect3 {
     type Output = Vect3;
 
+    #[inline]
     fn sub(self, other: Vect3) -> Vect3 {
         Vect3 {
             x: self.x - other.x,
@@ -104,6 +151,7 @@ impl Sub for Vect3 {
 impl Mul<f64> for Vect3 {
     type Output = Vect3;
 
+    #[inline]
     fn mul(self, scalar: f64) -> Vect3 {
         Vect3 {
             x: self.x * scalar,
@@ -116,6 +164,7 @@ impl Mul<f64> for Vect3 {
 impl Mul<Vect3> for f64 {
     type Output = Vect3;
 
+    #[inline]
     fn mul(self, vect: Vect3) -> Vect3 {
         Vect3 {
             x: self * vect.x,
@@ -140,6 +189,7 @@ impl Mul<f64> for &Vect3 {
 impl Mul<&Vect3> for f64 {
     type Output = Vect3;
 
+    #[inline]
     fn mul(self, vect: &Vect3) -> Vect3 {
         Vect3 {
             x: self * vect.x,
@@ -152,9 +202,15 @@ impl Mul<&Vect3> for f64 {
 impl Mul for Vect3 {
     type Output = f64;
 
+    #[inline]
     fn mul(self, other: Vect3) -> f64 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
+}
+
+#[inline]
+pub fn lerp(vect_1: Vect3, vect_2: Vect3, t: f64) -> Vect3 {
+    vect_1 + t * (vect_2 - vect_1)
 }
 
 // Quaternion stuff
@@ -170,6 +226,7 @@ impl Quat {
         Quat { w, v }
     }
 
+    #[inline]
     pub fn identity() -> Self {
         Quat {
             w: 1.0,
@@ -195,6 +252,7 @@ impl Quat {
         }
     }
 
+    #[inline]
     pub fn normalize(self) -> Self {
         let norm =
             (self.w * self.w + self.v.x * self.v.x + self.v.y * self.v.y + self.v.z * self.v.z)
@@ -209,6 +267,7 @@ impl Quat {
         }
     }
 
+    #[inline]
     pub fn conjugate(self) -> Self {
         Quat {
             w: self.w,
@@ -216,6 +275,7 @@ impl Quat {
         }
     }
 
+    #[inline]
     pub fn rotate(self, v: Vect3) -> Vect3 {
         let q_v = Quat { w: 0.0, v };
         let q_inv = self.conjugate();
@@ -275,6 +335,7 @@ impl Transform {
     }
     // Getters
 
+    #[inline]
     pub fn get_pos(&self) -> Vect3 {
         self.position
     }
@@ -304,6 +365,7 @@ impl Angle {
         Angle { value }
     }
 
+    #[inline]
     pub fn from_deg(value_deg: f64) -> Angle {
         Angle {
             value: value_deg * PI / 180.0,
@@ -314,14 +376,17 @@ impl Angle {
         self.value
     }
 
+    #[inline]
     pub fn cos(&self) -> f64 {
         self.value.cos()
     }
 
+    #[inline]
     pub fn sin(&self) -> f64 {
         self.value.sin()
     }
 
+    #[inline]
     pub fn tan(&self) -> f64 {
         self.value.tan()
     }

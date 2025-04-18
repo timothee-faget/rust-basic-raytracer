@@ -3,10 +3,20 @@ use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 
+use rayon::prelude::*;
+
+use crate::mods::color::ColorRBGOF;
+
+use super::color::lerp_color;
+use super::constants::BIAS;
+use super::constants::MAX_BOUNCES;
+use super::constants::RENDER_ITERATIONS;
+use super::objs::Intersection;
 use super::{
     color::ColorRBG,
-    objs::{Intersection, Object3D},
-    position::{self, Angle, Quat, Transform, Vect3},
+    funcs::LCG,
+    objs::Object3D,
+    position::{lerp, Angle, Quat, Transform, Vect3},
 };
 
 // Scene stuff
@@ -14,66 +24,127 @@ use super::{
 pub struct Scene {
     camera: Camera,
     objects: Vec<Box<dyn Object3D>>,
-    lights: Vec<Box<dyn Light>>,
 }
 
 impl Scene {
-    pub fn new(
-        camera: Camera,
-        objects: Vec<Box<dyn Object3D>>,
-        lights: Vec<Box<dyn Light>>,
-    ) -> Scene {
-        Scene {
-            camera,
-            objects,
-            lights,
-        }
+    pub fn new(camera: Camera, objects: Vec<Box<dyn Object3D>>) -> Scene {
+        Scene { camera, objects }
     }
 
-    pub fn render(&mut self) {
+    pub fn render_bounces(&mut self) {
         println!("== Rendering scene");
         let camera_pos = self.camera.transform.get_pos();
-
         let camera_axis = (
             self.camera.transform.get_x_axis(),
             self.camera.transform.get_y_axis(),
             self.camera.transform.get_z_axis(),
         );
 
-        for x in 0..self.camera.image.get_width() {
-            for y in 0..self.camera.image.get_height() {
-                let ray = Ray::new(camera_pos, self.camera.get_ray_direction(camera_axis, x, y));
+        let width = self.camera.image.get_width();
+        let height = self.camera.image.get_height();
+        let mut acc_buffer = vec![ColorRBGOF::BLACK; width * height];
 
-                let closest_intersection = self
-                    .objects
-                    .iter()
-                    .filter_map(|object| object.intersect(&ray))
-                    .min_by(|a, b| {
-                        a.distance
-                            .partial_cmp(&b.distance)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    });
+        // Créer une structure Scene partageable entre threads
+        let scene = &self;
 
-                if let Some(inter) = closest_intersection {
-                    let mut final_color = ColorRBG::BLACK;
+        for f in 0..RENDER_ITERATIONS {
+            // Paralléliser par pixel - directement dans les closures
+            let all_pixels: Vec<(usize, usize)> = (0..width)
+                .flat_map(|x| (0..height).map(move |y| (x, y)))
+                .collect();
 
-                    for light in &self.lights {
-                        final_color =
-                            final_color + light.get_light(&inter, camera_pos, &self.objects);
-                    }
+            let frame_results: Vec<(usize, usize, ColorRBG)> = all_pixels
+                .into_par_iter()
+                .map(|(x, y)| {
+                    let pixel_seed = 123456789_u64
+                        .wrapping_add(f as u64 * 0xA24BAED4)
+                        .wrapping_add((y * width + x) as u64 * 0x9E3779B9)
+                        .wrapping_mul(74747_u64); // Ajouter un multiplicateur pour améliorer la dispersion
+                    let mut local_randomizer = LCG::new(pixel_seed);
 
-                    self.camera.image.set_pixel(x, y, final_color.rgb());
+                    let ray = Ray::new(
+                        camera_pos,
+                        scene.camera.get_ray_direction(camera_axis, x, y),
+                    );
+                    let color = scene.trace(&ray, &mut local_randomizer, 0);
+
+                    (x, y, color)
+                })
+                .collect(); // Accumuler les résultats séquentiellement
+            for (x, y, color) in frame_results {
+                let idx = y * width + x;
+                acc_buffer[idx] = acc_buffer[idx] + color;
+            }
+        }
+
+        // Finaliser l'image - de manière séquentielle pour éviter les problèmes de mutabilité
+        for y in 0..height {
+            for x in 0..width {
+                let idx = y * width + x;
+                let avg_color = ((1.0 / RENDER_ITERATIONS as f64) * acc_buffer[idx]).to_rgb();
+                self.camera.image.set_pixel(x, y, avg_color.rgb());
+            }
+        }
+    }
+
+    pub fn trace(&self, ray: &Ray, randomizer: &mut LCG, bounce: u32) -> ColorRBG {
+        if bounce > MAX_BOUNCES {
+            return ColorRBG::BLACK;
+        }
+
+        let mut closest_intersection: Option<Intersection> = None;
+        let mut min_distance = f64::INFINITY;
+
+        for object in &self.objects {
+            if let Some(hit) = object.intersect(ray) {
+                if hit.distance > 1e-5 && hit.distance < min_distance {
+                    min_distance = hit.distance;
+                    closest_intersection = Some(hit);
                 }
             }
+        }
+
+        if let Some(inter) = closest_intersection {
+            let is_specular = inter.material.specular_prob >= randomizer.next_f64();
+
+            let dot = ray.direction * inter.normal;
+            let specular_dir = (ray.direction - 2.0 * inter.normal * dot).normalize();
+
+            let diffuse_dir =
+                (inter.normal + randomizer.next_normal_vect3(inter.normal)).normalize();
+            let ray_origin = inter.point + inter.normal * BIAS;
+
+            let ray_dir = lerp(
+                diffuse_dir,
+                specular_dir,
+                inter.material.smoothness * (is_specular as u8 as f64),
+            )
+            .normalize();
+            let new_ray = Ray::new(ray_origin, ray_dir);
+
+            let emitted = inter.material.get_emited_light();
+
+            let reflectance = lerp_color(
+                inter.material.color,
+                inter.material.specular_color,
+                is_specular as u8 as f64,
+            );
+
+            // Estimation d'importance / Russian roulette
+            let p = reflectance.max_component().clamp(0.1, 1.0);
+            if randomizer.next_f64() >= p {
+                return emitted;
+            }
+
+            let next_bounce_light = self.trace(&new_ray, randomizer, bounce + 1);
+            emitted + (1.0 / p) * (reflectance * next_bounce_light)
+        } else {
+            ColorRBG::BLACK
         }
     }
 
     pub fn add_object(&mut self, object: Box<dyn Object3D>) {
         self.objects.push(object);
-    }
-
-    pub fn add_light(&mut self, light: Box<dyn Light>) {
-        self.lights.push(light);
     }
 
     pub fn save_image(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
@@ -83,19 +154,11 @@ impl Scene {
     }
 }
 
-fn get_distance_coef_dif(d: f64) -> f64 {
-    1.0 / (0.002 * d * d + 0.05 * d + 1.0)
-}
-
-fn get_distance_coef_amb(d: f64) -> f64 {
-    1.0 / (2.0 * d * d + 2.0 * d + 1.0)
-}
-
 // Camera stuff
 
 #[derive(Clone)]
 pub struct Camera {
-    transform: Transform,
+    pub transform: Transform,
     focal: f64,
     fov: Angle,
     image: ImageRGB,
@@ -127,7 +190,12 @@ impl Camera {
         }
     }
 
-    fn get_ray_direction(&self, camera_axis: (Vect3, Vect3, Vect3), x: usize, y: usize) -> Vect3 {
+    pub fn get_ray_direction(
+        &self,
+        camera_axis: (Vect3, Vect3, Vect3),
+        x: usize,
+        y: usize,
+    ) -> Vect3 {
         let w = 2.0 * (self.fov / 2.0).tan() * self.focal;
         let h = (self.image.get_height() as f64 / self.image.get_width() as f64) * w;
         let alpha = w / (self.image.get_width() as f64);
@@ -141,188 +209,36 @@ impl Camera {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Material {
-    ambient: ColorRBG,
-    diffuse: ColorRBG,
-    specular: ColorRBG,
-    shininess: f64,
+    pub color: ColorRBG,
+    pub emission_color: ColorRBG,
+    pub specular_color: ColorRBG,
+    pub emission_strengh: f64,
+    pub smoothness: f64,
+    pub specular_prob: f64,
 }
 
 impl Material {
-    pub fn new(ambient: ColorRBG, diffuse: ColorRBG, specular: ColorRBG, shininess: f64) -> Self {
-        Material {
-            ambient,
-            diffuse,
-            specular,
-            shininess,
-        }
-    }
-
-    pub fn get_amb(&self) -> ColorRBG {
-        self.ambient
-    }
-
-    pub fn get_dif(&self) -> ColorRBG {
-        self.diffuse
-    }
-
-    pub fn get_spe(&self) -> ColorRBG {
-        self.specular
-    }
-
-    pub fn get_shi(&self) -> f64 {
-        self.shininess
-    }
-}
-
-// Light stuff
-pub trait Light {
-    fn get_light(
-        &self,
-        inter: &Intersection,
-        camera_pos: Vect3,
-        objects: &Vec<Box<dyn Object3D>>,
-    ) -> ColorRBG;
-}
-
-pub struct PointLight {
-    transform: Transform,
-    color: ColorRBG,
-}
-
-impl PointLight {
-    pub fn new(position: Vect3, color: ColorRBG) -> Self {
-        Self {
-            transform: Transform::new(position, Quat::identity()),
-            color,
-        }
-    }
-
-    pub fn get_pos(&self) -> Vect3 {
-        self.transform.get_pos()
-    }
-
-    pub fn get_color(&self) -> ColorRBG {
-        self.color
-    }
-}
-
-impl Light for PointLight {
-    fn get_light(
-        &self,
-        inter: &Intersection,
-        camera_pos: Vect3,
-        objects: &Vec<Box<dyn Object3D>>,
-    ) -> ColorRBG {
-        let bias = 1e-4;
-        let light_direction = (self.get_pos() - inter.point).normalize();
-        let light_distance = (self.get_pos() - inter.point).norm();
-        let light_ray = Ray::new(inter.point + bias * inter.normal, light_direction);
-
-        let mut final_color = ColorRBG::BLACK;
-
-        if !objects.iter().any(|object| {
-            if let Some(intersection) = object.intersect(&light_ray) {
-                intersection.distance > bias && intersection.distance < light_distance
-            } else {
-                false
-            }
-        }) {
-            let reflect_direction = (2.0 * (light_direction * inter.normal) * inter.normal
-                - light_direction)
-                .normalize();
-            let viewer_direction = (camera_pos - inter.point).normalize();
-
-            final_color = final_color
-                + get_distance_coef_dif(light_distance)
-                    * ((light_direction * inter.normal) * self.color * inter.material.diffuse)
-                + (reflect_direction * viewer_direction).powf(inter.material.shininess)
-                    * self.color
-                    * inter.material.specular; // SPECULAR PART
-        }
-        final_color + get_distance_coef_amb(light_distance) * self.color * inter.material.ambient
-    }
-}
-
-pub struct RectLight {
-    transform: Transform,
-    vect_1: Vect3,
-    vect_2: Vect3,
-    color: ColorRBG,
-}
-
-impl RectLight {
     pub fn new(
-        position: Vect3,
-        rotation: Quat,
-        vect_1: Vect3,
-        vect_2: Vect3,
         color: ColorRBG,
+        emission_color: ColorRBG,
+        specular_color: ColorRBG,
+        emission_strengh: f64,
+        smoothness: f64,
+        specular_prob: f64,
     ) -> Self {
         Self {
-            transform: Transform::new(position, rotation),
-            vect_1,
-            vect_2,
             color,
+            emission_color,
+            specular_color,
+            emission_strengh,
+            smoothness,
+            specular_prob,
         }
     }
-}
 
-impl Light for RectLight {
-    fn get_light(
-        &self,
-        inter: &Intersection,
-        camera_pos: Vect3,
-        objects: &Vec<Box<dyn Object3D>>,
-    ) -> ColorRBG {
-        let res = 10;
-        let grid: Vec<f64> = (0..res + 1).map(|i| i as f64 / (res as f64)).collect();
-        let coef = 1.0 / (res as f64 * res as f64);
-        //println!("{:?}", grid);
-
-        let mut final_color = ColorRBG::BLACK;
-        for i in &grid {
-            for j in &grid {
-                let ech_point = self.transform.get_pos() + self.vect_1 * *i + self.vect_2 * *j;
-                //println!("{:?}", ech_point);
-                let bias = 1e-4;
-                let light_direction = (ech_point - inter.point).normalize();
-                let light_distance = (ech_point - inter.point).norm();
-                let light_ray = Ray::new(inter.point + bias * inter.normal, light_direction);
-
-                if !objects.iter().any(|object| {
-                    if let Some(intersection) = object.intersect(&light_ray) {
-                        intersection.distance > bias && intersection.distance < light_distance
-                    } else {
-                        false
-                    }
-                }) {
-                    let reflect_direction = (2.0 * (light_direction * inter.normal) * inter.normal
-                        - light_direction)
-                        .normalize();
-                    let viewer_direction = (camera_pos - inter.point).normalize();
-
-                    final_color = final_color
-                        + 1.0
-                            * coef
-                            * (get_distance_coef_dif(light_distance)
-                                * ((light_direction * inter.normal)
-                                    * self.color
-                                    * inter.material.diffuse)
-                                + (reflect_direction * viewer_direction)
-                                    .powf(inter.material.shininess)
-                                    * self.color
-                                    * inter.material.specular); // SPECULAR PART
-                }
-                final_color = final_color
-                    + 5.0
-                        * coef
-                        * get_distance_coef_amb(light_distance)
-                        * self.color
-                        * inter.material.ambient;
-            }
-        }
-        //println!("{:?}", final_color);
-        final_color
+    #[inline]
+    pub fn get_emited_light(&self) -> ColorRBG {
+        self.emission_strengh.min(1.0) * self.emission_color
     }
 }
 
@@ -358,14 +274,22 @@ impl ImageRGB {
         }
     }
 
+    #[inline]
     pub fn get_width(&self) -> usize {
         self.data[0].len()
     }
 
+    #[inline]
     pub fn get_height(&self) -> usize {
         self.data.len()
     }
 
+    #[inline]
+    pub fn get_pixel_count(&self) -> usize {
+        self.data.len() * self.data[0].len()
+    }
+
+    #[inline]
     pub fn set_pixel(&mut self, x: usize, y: usize, value: (u8, u8, u8)) {
         self.data[y][x] = value;
     }

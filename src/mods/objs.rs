@@ -1,10 +1,7 @@
 use core::f64;
 use std::cmp::Ordering;
 
-use crate::mods::funcs::det_from_3_vects;
-
 use super::{
-    //color::ColorRBG,
     funcs::solve_quadratic,
     position::{Quat, Transform, Vect3},
     render::{Material, Ray},
@@ -75,7 +72,7 @@ impl PartialOrd for Intersection {
 
 // Object3D trait
 
-pub trait Object3D {
+pub trait Object3D: Send + Sync {
     fn intersect(&self, ray: &Ray) -> Option<Intersection>;
     fn rotate(&mut self, rotation: Quat);
     fn print(&self);
@@ -153,16 +150,21 @@ impl Plane {
 
 impl Object3D for Plane {
     fn intersect(&self, ray: &Ray) -> Option<Intersection> {
-        if (ray.direction * self.normal).abs() <= 1e-5 {
+        let dot = ray.direction * self.normal;
+        if dot.abs() <= 1e-5 {
             return None;
         }
 
-        let distance = -((ray.start - self.point) * self.normal) / (ray.direction * self.normal);
+        let distance = -((ray.start - self.point) * self.normal) / dot;
 
         if distance > 0.0 {
             let point = ray.start + distance * ray.direction;
-            let normal = self.normal;
-            Some(Intersection::new(distance, self.material, point, normal))
+            Some(Intersection::new(
+                distance,
+                self.material,
+                point,
+                self.normal,
+            ))
         } else {
             None
         }
@@ -207,38 +209,42 @@ impl Triangle {
 
 impl Object3D for Triangle {
     fn intersect(&self, ray: &Ray) -> Option<Intersection> {
-        if (ray.direction * self.normal).abs() <= 1e-5 {
+        let edge1 = self.vect_1;
+        let edge2 = self.vect_2;
+
+        let h = ray.direction.prod(edge2);
+        let a = edge1 * h;
+
+        // Rayon parallèle au triangle ?
+        if a.abs() < 1e-5 {
             return None;
         }
 
-        let vect_d = ray.start - self.point_1;
-        let det_den = det_from_3_vects(-1.0 * ray.direction, self.vect_1, self.vect_2);
-
-        let u = det_from_3_vects(-1.0 * ray.direction, vect_d, self.vect_2) / det_den;
+        let f = 1.0 / a;
+        let s = ray.start - self.point_1;
+        let u = f * s * h;
         if !(0.0..=1.0).contains(&u) {
             return None;
         }
 
-        let v = det_from_3_vects(-1.0 * ray.direction, self.vect_1, vect_d) / det_den;
+        let q = s.prod(edge1);
+        let v = f * ray.direction * q;
         if v < 0.0 || u + v > 1.0 {
             return None;
         }
 
-        let distance = det_from_3_vects(vect_d, self.vect_1, self.vect_2) / det_den;
-        if distance > f64::EPSILON {
-            let point = ray.start + distance * ray.direction;
-            Some(Intersection::new(
-                distance,
-                self.material,
-                point,
-                self.normal,
-            ))
+        let t = f * edge2 * q;
+        if t > f64::EPSILON {
+            let point = ray.start + ray.direction * t;
+            Some(Intersection::new(t, self.material, point, self.normal))
         } else {
             None
         }
     }
 
-    fn rotate(&mut self, rotation: Quat) {}
+    fn rotate(&mut self, rotation: Quat) {
+        todo!("{:?}", rotation);
+    }
 
     fn print(&self) {
         println!(
@@ -296,16 +302,27 @@ impl Cube {
 
 impl Object3D for Cube {
     fn intersect(&self, ray: &Ray) -> Option<Intersection> {
-        self.triangles
-            .iter()
-            .filter_map(|triangle| triangle.intersect(ray))
-            .filter(|inter| inter.distance.is_finite() && inter.distance > 1e-5)
-            .min_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap())
+        let mut closest_hit: Option<Intersection> = None;
+        let mut closest_distance = f64::INFINITY;
+
+        for triangle in &self.triangles {
+            if let Some(hit) = triangle.intersect(ray) {
+                let dist = hit.distance;
+                if dist > 1e-5 && dist.is_finite() && dist < closest_distance {
+                    closest_distance = dist;
+                    closest_hit = Some(hit);
+                }
+            }
+        }
+
+        closest_hit
     }
 
     fn print(&self) {
         println!("Cube");
     }
 
-    fn rotate(&mut self, rotation: Quat) {}
+    fn rotate(&mut self, rotation: Quat) {
+        todo!("{:?} {:?}", rotation, self.transform.get_pos());
+    }
 }
