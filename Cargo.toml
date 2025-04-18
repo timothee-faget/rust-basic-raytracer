@@ -1,9 +1,23 @@
 [package]
 name = "ray_tracer"
-version = "0.2.0"
+version = "0.5.0"
 edition = "2021"
 
 [dependencies]
+rayon = "1.10"
 
 [dev-dependencies]
 approx = "0.5.1"
+criterion = "0.5.1"
+
+[[bench]]
+name = "benchmark_comps"
+harness = false
+
+[[bench]]
+name = "benchmark_objs"
+harness = false
+
+[[bench]]
+name = "benchmark_scene"
+harness = false
