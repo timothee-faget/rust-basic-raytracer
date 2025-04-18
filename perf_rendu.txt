@@ -1,7 +1,0 @@
-1 - 23346
-2 - 7811 (ajout russian roulette)
-3 - 7699 (changement calcul reflect_dir)
-4 - 7731 (amélioration intersect plan)
-5 - 7529 (amélioration intersect triangle)
-6 - 6895 (optimisation des cubes)
-7 - 5964 (amélioration parcours des objets)
