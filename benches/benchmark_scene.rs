@@ -4,11 +4,11 @@ use ray_tracer::mods::{
     funcs::LCG,
     parser::Parser,
     position::{Angle, Quat, Vect3},
-    render::{Camera, ImageRGB, NewMaterial, Ray},
+    render::{Camera, ImageRGB, Material, Ray},
 };
 
 pub fn bench_mat(c: &mut Criterion) {
-    let mat = NewMaterial::new(
+    let mat = Material::new(
         ColorRBG::BLACK,
         ColorRBG::BLACK,
         ColorRBG::BLACK,
@@ -51,7 +51,7 @@ pub fn bench_image(c: &mut Criterion) {
 }
 
 pub fn bench_scene(c: &mut Criterion) {
-    let mut parser = Parser::new("scenes/bench_scene.rtp");
+    let mut parser = Parser::build("scenes/bench_scene.rtp").unwrap();
     let mut scene = parser.parse_scene();
 
     let ray = Ray::new(Vect3::new(0.0, 0.0, 20.0), Vect3::FORWARD);

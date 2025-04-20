@@ -1,4 +1,4 @@
-use std::{fs, vec};
+use std::{error::Error, fs, vec};
 
 use super::{
     color::ColorRBG,
@@ -14,8 +14,8 @@ enum Token {
     Identifier(String),
     Number(f64),
     Colon,
-    LBrace, // {
-    RBrace, // }
+    LBrace,
+    RBrace,
     Newline,
 }
 
@@ -28,18 +28,17 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(filename: &str) -> Parser {
+    pub fn build(filename: &str) -> Result<Self, Box<dyn Error>> {
         println!("== Parsing file : {}", filename);
-        let mut parser = Parser {
+        let mut parser = Self {
             tokens: vec![],
             materials: vec![],
             pos: 0,
         };
-        // TODO : Ajouter une gestion des erreurs plus solide
-        let input = fs::read_to_string(filename).unwrap();
-        let slice: &str = &input;
-        parser.tokenize(slice);
-        parser
+
+        let file_content: &str = &fs::read_to_string(filename)?;
+        parser.tokenize(file_content);
+        Ok(parser)
     }
 
     fn peek(&self) -> Option<&Token> {
@@ -138,10 +137,6 @@ impl Parser {
                     let material = self.parse_material();
                     self.materials.push(material);
                 }
-                Token::Identifier(name) if name == "point_light" => {
-                    self.next();
-                    // lights.push(Box::new(self.parse_light()));
-                }
                 Token::Identifier(name) if name == "sphere" => {
                     self.next();
                     objects.push(Box::new(self.parse_sphere()));
@@ -219,47 +214,6 @@ impl Parser {
         }
 
         Camera::build(position, rotation, focal, fov, resolution.0, resolution.1)
-    }
-
-    fn parse_f64_array(&mut self, count: usize) -> [f64; 4] {
-        let mut result = [0.0; 4];
-        for res in result.iter_mut().take(count) {
-            *res = self.parse_number();
-        }
-        result
-    }
-
-    fn parse_vect3(&mut self) -> Vect3 {
-        let data = self.parse_f64_array(3);
-        Vect3::new(data[0], data[1], data[2])
-    }
-
-    fn parse_quat(&mut self) -> Quat {
-        let data = self.parse_f64_array(4);
-        Quat::new(data[0], Vect3::new(data[1], data[2], data[3]))
-    }
-
-    fn parse_number(&mut self) -> f64 {
-        match self.next() {
-            Some(Token::Number(n)) => *n,
-            other => panic!("Expected number, got {:?}", other),
-        }
-    }
-
-    fn parse_color(&mut self) -> ColorRBG {
-        let data = self.parse_f64_array(3);
-        ColorRBG::new(data[0], data[1], data[2])
-    }
-
-    fn parse_angle(&mut self) -> Angle {
-        Angle::from_deg(self.parse_number())
-    }
-
-    fn parse_string(&mut self) -> String {
-        match self.next() {
-            Some(Token::Identifier(name)) => String::from(name),
-            other => panic!("Expected material name, got {:?}", other),
-        }
     }
 
     fn parse_material(&mut self) -> (String, Material) {
@@ -367,25 +321,7 @@ impl Parser {
             }
         }
 
-        if let Some(material) = self
-            .materials
-            .iter()
-            .find(|(mat_name, _)| *mat_name == *name)
-            .map(|(_, mat)| mat)
-        {
-            Sphere::new(position, radius, *material)
-        } else {
-            let material = Material::new(
-                0.3 * ColorRBG::WHITE,
-                ColorRBG::WHITE,
-                1.0 * ColorRBG::WHITE,
-                0.0,
-                0.0,
-                0.0,
-            );
-            println!("Matériau introuvable");
-            Sphere::new(position, radius, material)
-        }
+        Sphere::new(position, radius, self.get_material(name))
     }
 
     fn parse_plane(&mut self) -> Plane {
@@ -422,25 +358,7 @@ impl Parser {
             }
         }
 
-        if let Some(material) = self
-            .materials
-            .iter()
-            .find(|(mat_name, _)| *mat_name == *name)
-            .map(|(_, mat)| mat)
-        {
-            Plane::new(point, normal, *material)
-        } else {
-            let material = Material::new(
-                0.3 * ColorRBG::WHITE,
-                ColorRBG::WHITE,
-                1.0 * ColorRBG::WHITE,
-                0.0,
-                0.0,
-                0.0,
-            );
-            println!("Matériau introuvable");
-            Plane::new(point, normal, material)
-        }
+        Plane::new(point, normal, self.get_material(name))
     }
 
     fn parse_triangle(&mut self) -> Triangle {
@@ -483,25 +401,7 @@ impl Parser {
             }
         }
 
-        if let Some(material) = self
-            .materials
-            .iter()
-            .find(|(mat_name, _)| *mat_name == *name)
-            .map(|(_, mat)| mat)
-        {
-            Triangle::new(point_1, point_2, point_3, *material)
-        } else {
-            let material = Material::new(
-                0.3 * ColorRBG::WHITE,
-                ColorRBG::WHITE,
-                1.0 * ColorRBG::WHITE,
-                0.0,
-                0.0,
-                0.0,
-            );
-            println!("Matériau introuvable");
-            Triangle::new(point_1, point_2, point_3, material)
-        }
+        Triangle::new(point_1, point_2, point_3, self.get_material(name))
     }
 
     fn parse_cube(&mut self) -> Cube {
@@ -544,24 +444,60 @@ impl Parser {
             }
         }
 
+        Cube::new(position, rotation, size, self.get_material(name))
+    }
+
+    fn get_material(&self, material_name: String) -> Material {
         if let Some(material) = self
             .materials
             .iter()
-            .find(|(mat_name, _)| *mat_name == *name)
+            .find(|(name, _)| *name == *material_name)
             .map(|(_, mat)| mat)
         {
-            Cube::new(position, rotation, size, *material)
+            *material
         } else {
-            let material = Material::new(
-                0.3 * ColorRBG::WHITE,
-                ColorRBG::WHITE,
-                1.0 * ColorRBG::WHITE,
-                0.0,
-                0.0,
-                0.0,
-            );
-            println!("Matériau introuvable");
-            Cube::new(position, rotation, size, material)
+            Material::default()
+        }
+    }
+
+    fn parse_f64_array(&mut self, count: usize) -> [f64; 4] {
+        let mut result = [0.0; 4];
+        for res in result.iter_mut().take(count) {
+            *res = self.parse_number();
+        }
+        result
+    }
+
+    fn parse_vect3(&mut self) -> Vect3 {
+        let data = self.parse_f64_array(3);
+        Vect3::new(data[0], data[1], data[2])
+    }
+
+    fn parse_quat(&mut self) -> Quat {
+        let data = self.parse_f64_array(4);
+        Quat::new(data[0], Vect3::new(data[1], data[2], data[3]))
+    }
+
+    fn parse_number(&mut self) -> f64 {
+        match self.next() {
+            Some(Token::Number(n)) => *n,
+            other => panic!("Expected number, got {:?}", other),
+        }
+    }
+
+    fn parse_color(&mut self) -> ColorRBG {
+        let data = self.parse_f64_array(3);
+        ColorRBG::new(data[0], data[1], data[2])
+    }
+
+    fn parse_angle(&mut self) -> Angle {
+        Angle::from_deg(self.parse_number())
+    }
+
+    fn parse_string(&mut self) -> String {
+        match self.next() {
+            Some(Token::Identifier(name)) => String::from(name),
+            other => panic!("Expected material name, got {:?}", other),
         }
     }
 }

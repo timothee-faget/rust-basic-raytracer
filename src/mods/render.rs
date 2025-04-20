@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
 
+use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
 use crate::mods::color::ColorRBGOF;
@@ -44,8 +45,11 @@ impl Scene {
         let height = self.camera.image.get_height();
         let mut acc_buffer = vec![ColorRBGOF::BLACK; width * height];
 
-        // Créer une structure Scene partageable entre threads
         let scene = &self;
+        let bar = ProgressBar::new(RENDER_ITERATIONS as u64);
+        bar.set_style(ProgressStyle::default_bar().template(
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} ({percent}%) | ETA: {eta}",
+        ).unwrap().progress_chars("##-"));
 
         for f in 0..RENDER_ITERATIONS {
             // Paralléliser par pixel - directement dans les closures
@@ -75,7 +79,11 @@ impl Scene {
                 let idx = y * width + x;
                 acc_buffer[idx] = acc_buffer[idx] + color;
             }
+
+            bar.inc(1);
         }
+
+        bar.finish_with_message("Rendu terminé!");
 
         // Finaliser l'image - de manière séquentielle pour éviter les problèmes de mutabilité
         for y in 0..height {
@@ -239,6 +247,19 @@ impl Material {
     #[inline]
     pub fn get_emited_light(&self) -> ColorRBG {
         self.emission_strengh.min(1.0) * self.emission_color
+    }
+}
+
+impl Default for Material {
+    fn default() -> Self {
+        Material {
+            color: ColorRBG::WHITE,
+            emission_color: ColorRBG::WHITE,
+            specular_color: ColorRBG::WHITE,
+            emission_strengh: 0.0,
+            smoothness: 0.5,
+            specular_prob: 0.5,
+        }
     }
 }
 
