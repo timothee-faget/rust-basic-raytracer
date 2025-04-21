@@ -1,4 +1,3 @@
-use core::f64;
 use std::cmp::Ordering;
 
 use super::{
@@ -324,5 +323,106 @@ impl Object3D for Cube {
 
     fn rotate(&mut self, rotation: Quat) {
         todo!("{:?} {:?}", rotation, self.transform.get_pos());
+    }
+}
+
+// Object Enum
+
+#[derive(Debug)]
+pub enum Object {
+    Sphere(Transform, f64, Material),
+    Plane(Vect3, Vect3, Material),
+    Triangle(Vect3, Vect3, Vect3, Vect3, Material),
+}
+
+impl Object {
+    pub fn new_sphere(transform: Transform, radius: f64, material: Material) -> Self {
+        Self::Sphere(transform, radius, material)
+    }
+
+    pub fn new_plane(point: Vect3, normal: Vect3, material: Material) -> Self {
+        Self::Plane(point, normal, material)
+    }
+
+    pub fn new_triangle(
+        point_1: Vect3,
+        point_2: Vect3,
+        point_3: Vect3,
+        material: Material,
+    ) -> Self {
+        let vect_1 = point_2 - point_1;
+        let vect_2 = point_3 - point_1;
+        let normal = vect_2.prod(vect_1).normalize();
+        Self::Triangle(point_1, normal, vect_1, vect_2, material)
+    }
+
+    pub fn intersect(&self, ray: &Ray) -> Option<Intersection> {
+        match self {
+            Object::Sphere(t, r, m) => {
+                let a = ray.direction * ray.direction;
+                let b = 2.0 * (ray.direction * (ray.start - t.get_pos()));
+                let c = (ray.start - t.get_pos()) * (ray.start - t.get_pos()) - r * r;
+
+                let (t1, t2) = solve_quadratic(a, b, c)?;
+
+                let distance = match (t1 >= 0.0, t2 >= 0.0) {
+                    (true, true) => t1.min(t2),
+                    (true, false) => t1,
+                    (false, true) => t2,
+                    (false, false) => return None,
+                };
+
+                let point = ray.start + distance * ray.direction;
+                let normal = (point - t.get_pos()).normalize();
+                Some(Intersection::new(distance, *m, point, normal))
+            }
+            Object::Plane(p, n, m) => {
+                let dot = ray.direction * *n;
+                if dot.abs() <= 1e-5 {
+                    return None;
+                }
+
+                let distance = -((ray.start - *p) * *n) / dot;
+
+                if distance > 0.0 {
+                    let point = ray.start + distance * ray.direction;
+                    Some(Intersection::new(distance, *m, point, *n))
+                } else {
+                    None
+                }
+            }
+            Object::Triangle(p, n, v1, v2, m) => {
+                let edge1 = *v1;
+                let edge2 = *v2;
+
+                let h = ray.direction.prod(edge2);
+                let a = edge1 * h;
+
+                if a.abs() < 1e-5 {
+                    return None;
+                }
+
+                let f = 1.0 / a;
+                let s = ray.start - *p;
+                let u = f * s * h;
+                if !(0.0..=1.0).contains(&u) {
+                    return None;
+                }
+
+                let q = s.prod(edge1);
+                let v = f * ray.direction * q;
+                if v < 0.0 || u + v > 1.0 {
+                    return None;
+                }
+
+                let t = f * edge2 * q;
+                if t > f64::EPSILON {
+                    let point = ray.start + ray.direction * t;
+                    Some(Intersection::new(t, *m, point, *n))
+                } else {
+                    None
+                }
+            }
+        }
     }
 }

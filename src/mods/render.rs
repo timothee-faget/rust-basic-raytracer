@@ -52,7 +52,6 @@ impl Scene {
         ).unwrap().progress_chars("##-"));
 
         for f in 0..RENDER_ITERATIONS {
-            // Paralléliser par pixel - directement dans les closures
             let all_pixels: Vec<(usize, usize)> = (0..width)
                 .flat_map(|x| (0..height).map(move |y| (x, y)))
                 .collect();
@@ -63,7 +62,7 @@ impl Scene {
                     let pixel_seed = 123456789_u64
                         .wrapping_add(f as u64 * 0xA24BAED4)
                         .wrapping_add((y * width + x) as u64 * 0x9E3779B9)
-                        .wrapping_mul(74747_u64); // Ajouter un multiplicateur pour améliorer la dispersion
+                        .wrapping_mul(74747_u64);
                     let mut local_randomizer = LCG::new(pixel_seed);
 
                     let ray = Ray::new(
@@ -74,7 +73,7 @@ impl Scene {
 
                     (x, y, color)
                 })
-                .collect(); // Accumuler les résultats séquentiellement
+                .collect();
             for (x, y, color) in frame_results {
                 let idx = y * width + x;
                 acc_buffer[idx] = acc_buffer[idx] + color;
@@ -85,7 +84,6 @@ impl Scene {
 
         bar.finish_with_message("Rendu terminé!");
 
-        // Finaliser l'image - de manière séquentielle pour éviter les problèmes de mutabilité
         for y in 0..height {
             for x in 0..width {
                 let idx = y * width + x;
