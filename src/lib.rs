@@ -1,3 +1,4 @@
+#![feature(portable_simd)]
 pub mod mods;
 use std::error::Error;
 

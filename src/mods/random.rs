@@ -65,7 +65,7 @@ mod tests_funcs {
         let mut rand = LCG::new(213456789);
 
         for _ in 0..100 {
-            assert!(rand.next_normal_vect3(normal).y >= 0.0);
+            assert!(rand.next_normal_vect3(normal).y() >= 0.0);
         }
     }
 }

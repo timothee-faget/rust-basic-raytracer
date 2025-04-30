@@ -2,6 +2,10 @@
 name = "rbpt"
 version = "1.0.0"
 edition = "2021"
+rust-version = "1.75.0"
+
+[features]
+simd_support = []
 
 [dependencies]
 rayon = "1.10"
@@ -25,3 +29,4 @@ harness = false
 [[bench]]
 name = "benchmark_scene"
 harness = false
+

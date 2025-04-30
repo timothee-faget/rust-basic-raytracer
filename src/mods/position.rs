@@ -1,117 +1,146 @@
 use core::f64;
 use core::f64::consts::PI;
 use std::ops::{Add, Div, Mul, Sub};
+use std::simd::{cmp::SimdPartialEq, f64x4};
 
-/// 3D vector implementation
+/// 3D vector implementation using SIMD
 #[derive(Debug, Copy, Clone)]
 pub struct Vect3 {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
+    // Utilisation de f64x4 pour stocker [x, y, z, 0]
+    simd: f64x4,
 }
 
 impl Vect3 {
     /// New vector creator
     pub fn new(x: f64, y: f64, z: f64) -> Self {
-        Self { x, y, z }
+        Self {
+            simd: f64x4::from_array([x, y, z, 0.0]),
+        }
+    }
+
+    /// Accesseur pour x
+    #[inline]
+    pub fn x(&self) -> f64 {
+        self.simd[0]
+    }
+
+    /// Accesseur pour y
+    #[inline]
+    pub fn y(&self) -> f64 {
+        self.simd[1]
+    }
+
+    /// Accesseur pour z
+    #[inline]
+    pub fn z(&self) -> f64 {
+        self.simd[2]
     }
 
     /// Creates vector from array
     pub fn from_arr(arr: [f64; 3]) -> Self {
         Self {
-            x: arr[0],
-            y: arr[1],
-            z: arr[2],
+            simd: f64x4::from_array([arr[0], arr[1], arr[2], 0.0]),
         }
     }
 
     /// Cross product beteen 2 vectors
     #[inline]
     pub fn prod(self, other: Self) -> Self {
+        // Effectue le produit vectoriel manuellement
+        // x = self.y * other.z - self.z * other.y
+        // y = self.z * other.x - self.x * other.z
+        // z = self.x * other.y - self.y * other.x
+        let a_yzx = f64x4::from_array([self.y(), self.z(), self.x(), 0.0]);
+        let b_zxy = f64x4::from_array([other.z(), other.x(), other.y(), 0.0]);
+
+        let a_zxy = f64x4::from_array([self.z(), self.x(), self.y(), 0.0]);
+        let b_yzx = f64x4::from_array([other.y(), other.z(), other.x(), 0.0]);
+
+        let product = a_yzx * b_zxy - a_zxy * b_yzx;
+
         Vect3 {
-            x: self.y * other.z - self.z * other.y,
-            y: self.z * other.x - self.x * other.z,
-            z: self.x * other.y - self.y * other.x,
+            simd: f64x4::from_array([product[0], product[1], product[2], 0.0]),
         }
     }
 
     /// Length of a vector
     #[inline]
     pub fn norm(&self) -> f64 {
-        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
+        // Calcule x² + y² + z² puis prend la racine carrée
+        let squared = self.simd * self.simd;
+        let sum = squared[0] + squared[1] + squared[2];
+        sum.sqrt()
     }
 
-    /// Length of a vector
+    /// Normalize the vector
     #[inline]
     pub fn normalize(&self) -> Self {
-        self * (1.0 / self.norm())
+        let norm = self.norm();
+        if norm == 0.0 {
+            return Self::ZERO;
+        }
+
+        let inv_norm = 1.0 / norm;
+        Self {
+            simd: self.simd * f64x4::splat(inv_norm),
+        }
     }
 
     /// Dot product of 2 vectors
     #[inline]
     pub fn dot(&self, other: &Self) -> f64 {
-        self.x * other.x + self.y * other.y + self.z * other.z
+        let product = self.simd * other.simd;
+        product[0] + product[1] + product[2]
     }
 
     /// 3D vector to f64 array
     #[inline]
     pub fn to_arr(&self) -> [f64; 3] {
-        [self.x, self.y, self.z]
+        [self.x(), self.y(), self.z()]
     }
 
-    /// Default ZERO vectoryy
+    /// Default ZERO vector
     pub const ZERO: Self = Self {
-        x: 0.0,
-        y: 0.0,
-        z: 0.0,
+        simd: f64x4::from_array([0.0, 0.0, 0.0, 0.0]),
     };
 
-    /// Default UP vectoryy
+    /// Default UP vector
     pub const UP: Self = Self {
-        x: 0.0,
-        y: 1.0,
-        z: 0.0,
+        simd: f64x4::from_array([0.0, 1.0, 0.0, 0.0]),
     };
 
-    /// Default RIGHT vectoryy
+    /// Default RIGHT vector
     pub const RIGHT: Self = Self {
-        x: 1.0,
-        y: 0.0,
-        z: 0.0,
+        simd: f64x4::from_array([1.0, 0.0, 0.0, 0.0]),
     };
 
-    /// Default FORWARD vectoryy
+    /// Default FORWARD vector
     pub const FORWARD: Self = Self {
-        x: 0.0,
-        y: 0.0,
-        z: 1.0,
+        simd: f64x4::from_array([0.0, 0.0, 1.0, 0.0]),
     };
 
-    /// Default DOWN vectoryy
+    /// Default DOWN vector
     pub const DOWN: Self = Self {
-        x: 0.0,
-        y: -1.0,
-        z: 0.0,
+        simd: f64x4::from_array([0.0, -1.0, 0.0, 0.0]),
     };
 
-    /// Default LEFT vectoryy
+    /// Default LEFT vector
     pub const LEFT: Self = Self {
-        x: -1.0,
-        y: 0.0,
-        z: 0.0,
+        simd: f64x4::from_array([-1.0, 0.0, 0.0, 0.0]),
     };
 
-    /// Default BACKWARD vectoryy
+    /// Default BACKWARD vector
     pub const BACKWARD: Self = Self {
-        x: 0.0,
-        y: 0.0,
-        z: -1.0,
+        simd: f64x4::from_array([0.0, 0.0, -1.0, 0.0]),
     };
 }
 
 impl PartialEq for Vect3 {
     fn eq(&self, other: &Self) -> bool {
-        (self.x == other.x) && (self.y == other.y) && (self.z == other.z)
+        let mask = self.simd.simd_eq(other.simd);
+        // Vérifier que les 3 premières composantes sont égales
+        let mask_bits = mask.to_bitmask();
+        (mask_bits & 0b0111) == 0b0111
     }
 }
 
@@ -121,9 +150,7 @@ impl Add for Vect3 {
     #[inline]
     fn add(self, other: Vect3) -> Vect3 {
         Vect3 {
-            x: self.x + other.x,
-            y: self.y + other.y,
-            z: self.z + other.z,
+            simd: self.simd + other.simd,
         }
     }
 }
@@ -134,33 +161,29 @@ impl<'a> Add<Vect3> for &'a Vect3 {
     #[inline]
     fn add(self, other: Vect3) -> Vect3 {
         Vect3 {
-            x: self.x + other.x,
-            y: self.y + other.y,
-            z: self.z + other.z,
+            simd: self.simd + other.simd,
         }
     }
 }
+
 impl<'b> Add<&'b Vect3> for Vect3 {
     type Output = Vect3;
 
     #[inline]
     fn add(self, other: &'b Vect3) -> Vect3 {
         Vect3 {
-            x: self.x + other.x,
-            y: self.y + other.y,
-            z: self.z + other.z,
+            simd: self.simd + other.simd,
         }
     }
 }
+
 impl<'a, 'b> Add<&'b Vect3> for &'a Vect3 {
     type Output = Vect3;
 
     #[inline]
     fn add(self, other: &'b Vect3) -> Vect3 {
         Vect3 {
-            x: self.x + other.x,
-            y: self.y + other.y,
-            z: self.z + other.z,
+            simd: self.simd + other.simd,
         }
     }
 }
@@ -171,9 +194,7 @@ impl Sub for Vect3 {
     #[inline]
     fn sub(self, other: Vect3) -> Vect3 {
         Vect3 {
-            x: self.x - other.x,
-            y: self.y - other.y,
-            z: self.z - other.z,
+            simd: self.simd - other.simd,
         }
     }
 }
@@ -184,9 +205,7 @@ impl Mul<f64> for Vect3 {
     #[inline]
     fn mul(self, scalar: f64) -> Vect3 {
         Vect3 {
-            x: self.x * scalar,
-            y: self.y * scalar,
-            z: self.z * scalar,
+            simd: self.simd * f64x4::splat(scalar),
         }
     }
 }
@@ -197,9 +216,7 @@ impl Mul<Vect3> for f64 {
     #[inline]
     fn mul(self, vect: Vect3) -> Vect3 {
         Vect3 {
-            x: self * vect.x,
-            y: self * vect.y,
-            z: self * vect.z,
+            simd: f64x4::splat(self) * vect.simd,
         }
     }
 }
@@ -209,9 +226,7 @@ impl Mul<f64> for &Vect3 {
 
     fn mul(self, scalar: f64) -> Vect3 {
         Vect3 {
-            x: self.x * scalar,
-            y: self.y * scalar,
-            z: self.z * scalar,
+            simd: self.simd * f64x4::splat(scalar),
         }
     }
 }
@@ -222,9 +237,7 @@ impl Mul<&Vect3> for f64 {
     #[inline]
     fn mul(self, vect: &Vect3) -> Vect3 {
         Vect3 {
-            x: self * vect.x,
-            y: self * vect.y,
-            z: self * vect.z,
+            simd: f64x4::splat(self) * vect.simd,
         }
     }
 }
@@ -234,35 +247,48 @@ impl Mul for Vect3 {
 
     #[inline]
     fn mul(self, other: Vect3) -> f64 {
-        self.x * other.x + self.y * other.y + self.z * other.z
+        self.dot(&other)
     }
 }
 
-/// 3D vectoer lerper
+/// 3D vector lerper
 #[inline]
 pub fn lerp(vect_1: Vect3, vect_2: Vect3, t: f64) -> Vect3 {
     vect_1 + t * (vect_2 - vect_1)
 }
 
-/// Quaternion implementation
+/// Quaternion implementation with SIMD
 #[derive(Debug, Clone, Copy)]
 pub struct Quat {
-    w: f64,
-    v: Vect3,
+    // Stocke [x, y, z, w] - remarquez que w est à la fin pour faciliter certaines opérations
+    simd: f64x4,
 }
 
 impl Quat {
     /// New quaternion constructor
     pub fn new(w: f64, v: Vect3) -> Quat {
-        Quat { w, v }
+        Quat {
+            simd: f64x4::from_array([v.x(), v.y(), v.z(), w]),
+        }
+    }
+
+    /// Récupère la partie réelle (w)
+    #[inline]
+    pub fn w(&self) -> f64 {
+        self.simd[3]
+    }
+
+    /// Récupère la partie vectorielle (v)
+    #[inline]
+    pub fn v(&self) -> Vect3 {
+        Vect3::new(self.simd[0], self.simd[1], self.simd[2])
     }
 
     /// Identity (no rotation no scaling)
     #[inline]
     pub fn identity() -> Self {
         Quat {
-            w: 1.0,
-            v: Vect3::new(0.0, 0.0, 0.0),
+            simd: f64x4::from_array([0.0, 0.0, 0.0, 1.0]),
         }
     }
 
@@ -270,9 +296,15 @@ impl Quat {
     pub fn from_axis_angle(axis: Vect3, angle: f64) -> Self {
         let half_angle = Angle::new(angle / 2.0);
         let half_angle_sin = half_angle.sin();
+        let normalized_axis = axis.normalize();
+
         Quat {
-            w: half_angle.cos(),
-            v: half_angle_sin * axis,
+            simd: f64x4::from_array([
+                normalized_axis.x() * half_angle_sin,
+                normalized_axis.y() * half_angle_sin,
+                normalized_axis.z() * half_angle_sin,
+                half_angle.cos(),
+            ]),
         }
     }
 
@@ -280,45 +312,58 @@ impl Quat {
     pub fn from_axis_angle_deg(axis: Vect3, angle: f64) -> Self {
         let half_angle = Angle::from_deg(angle / 2.0);
         let half_angle_sin = half_angle.sin();
+        let normalized_axis = axis.normalize();
+
         Quat {
-            w: half_angle.cos(),
-            v: half_angle_sin * axis,
+            simd: f64x4::from_array([
+                normalized_axis.x() * half_angle_sin,
+                normalized_axis.y() * half_angle_sin,
+                normalized_axis.z() * half_angle_sin,
+                half_angle.cos(),
+            ]),
         }
     }
 
     /// Normalizes quaternion
     #[inline]
     pub fn normalize(self) -> Self {
-        let norm =
-            (self.w * self.w + self.v.x * self.v.x + self.v.y * self.v.y + self.v.z * self.v.z)
-                .sqrt();
-        if norm == 0.0 {
-            self
-        } else {
-            Quat {
-                w: self.w / norm,
-                v: self.v * (1.0 / norm),
-            }
+        let squared = self.simd * self.simd;
+        let sum = squared[0] + squared[1] + squared[2] + squared[3];
+
+        if sum == 0.0 {
+            return self;
+        }
+
+        let norm = sum.sqrt();
+        let inv_norm = 1.0 / norm;
+
+        Quat {
+            simd: self.simd * f64x4::splat(inv_norm),
         }
     }
 
     /// Conjugates quaternion
     #[inline]
     pub fn conjugate(self) -> Self {
+        // Inverse les parties x, y, z mais pas w
+        let conj_mask = f64x4::from_array([-1.0, -1.0, -1.0, 1.0]);
         Quat {
-            w: self.w,
-            v: -1.0 * self.v,
+            simd: self.simd * conj_mask,
         }
     }
 
-    /// Rotates a 3D vcetor from self
+    /// Rotates a 3D vector from self
     #[inline]
     pub fn rotate(self, v: Vect3) -> Vect3 {
-        let q_v = Quat { w: 0.0, v };
+        // Convertit le vecteur en quaternion avec w=0
+        let q_v = Quat::new(0.0, v);
         let q_inv = self.conjugate();
+
+        // q * q_v * q^-1
         let result = self * q_v * q_inv;
 
-        Vect3::new(result.v.x, result.v.y, result.v.z)
+        // Extrait la partie vectorielle du résultat
+        result.v()
     }
 }
 
@@ -326,14 +371,19 @@ impl Mul for Quat {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        Self {
-            w: self.w * rhs.w - self.v.x * rhs.v.x - self.v.y * rhs.v.y - self.v.z * rhs.v.z,
-            v: Vect3 {
-                x: self.w * rhs.v.x + self.v.x * rhs.w + self.v.y * rhs.v.z - self.v.z * rhs.v.y,
-                y: self.w * rhs.v.y + self.v.y * rhs.w + self.v.z * rhs.v.x - self.v.x * rhs.v.z,
-                z: self.w * rhs.v.z + self.v.z * rhs.w + self.v.x * rhs.v.y - self.v.y * rhs.v.x,
-            },
-        }
+        // Multiplication quaternion: (a, u) * (b, v) = (ab - u·v, av + bu + u×v)
+        let a = self.w();
+        let b = rhs.w();
+        let u = self.v();
+        let v = rhs.v();
+
+        // Partie scalaire: ab - u·v
+        let w = a * b - u.dot(&v);
+
+        // Partie vectorielle: av + bu + u×v
+        let vec_part = v * a + u * b + u.prod(v);
+
+        Self::new(w, vec_part)
     }
 }
 
@@ -484,9 +534,9 @@ mod tests_quaternions {
         }
 
         fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-            f64::abs_diff_eq(&self.x, &other.x, epsilon)
-                && f64::abs_diff_eq(&self.y, &other.y, epsilon)
-                && f64::abs_diff_eq(&self.z, &other.z, epsilon)
+            f64::abs_diff_eq(&self.x(), &other.x(), epsilon)
+                && f64::abs_diff_eq(&self.y(), &other.y(), epsilon)
+                && f64::abs_diff_eq(&self.z(), &other.z(), epsilon)
         }
     }
 
@@ -502,9 +552,9 @@ mod tests_quaternions {
             epsilon: Self::Epsilon,
             max_relative: Self::Epsilon,
         ) -> bool {
-            f64::relative_eq(&self.x, &other.x, epsilon, max_relative)
-                && f64::relative_eq(&self.y, &other.y, epsilon, max_relative)
-                && f64::relative_eq(&self.z, &other.z, epsilon, max_relative)
+            f64::relative_eq(&self.x(), &other.x(), epsilon, max_relative)
+                && f64::relative_eq(&self.y(), &other.y(), epsilon, max_relative)
+                && f64::relative_eq(&self.z(), &other.z(), epsilon, max_relative)
         }
     }
 
@@ -602,9 +652,9 @@ mod tests_vectors {
 
         let vect3_result = vect3_1 + vect3_2;
 
-        assert_eq!(vect3_result.x, 3.0);
-        assert_eq!(vect3_result.y, 5.0);
-        assert_eq!(vect3_result.z, 2.0);
+        assert_eq!(vect3_result.x(), 3.0);
+        assert_eq!(vect3_result.y(), 5.0);
+        assert_eq!(vect3_result.z(), 2.0);
     }
 
     #[test]
@@ -614,9 +664,9 @@ mod tests_vectors {
 
         let vect3_result = vect3_1 - vect3_2;
 
-        assert_eq!(vect3_result.x, -1.0);
-        assert_eq!(vect3_result.y, 3.0);
-        assert_eq!(vect3_result.z, -4.0);
+        assert_eq!(vect3_result.x(), -1.0);
+        assert_eq!(vect3_result.y(), 3.0);
+        assert_eq!(vect3_result.z(), -4.0);
     }
 
     #[test]
@@ -640,13 +690,13 @@ mod tests_vectors {
         let vect3_result_1 = vect3 * scalar;
         let vect3_result_2 = scalar * vect3;
 
-        assert_eq!(vect3_result_1.x, 3.5);
-        assert_eq!(vect3_result_1.y, 14.0);
-        assert_eq!(vect3_result_1.z, -3.5);
+        assert_eq!(vect3_result_1.x(), 3.5);
+        assert_eq!(vect3_result_1.y(), 14.0);
+        assert_eq!(vect3_result_1.z(), -3.5);
 
-        assert_eq!(vect3_result_2.x, 3.5);
-        assert_eq!(vect3_result_2.y, 14.0);
-        assert_eq!(vect3_result_2.z, -3.5);
+        assert_eq!(vect3_result_2.x(), 3.5);
+        assert_eq!(vect3_result_2.y(), 14.0);
+        assert_eq!(vect3_result_2.z(), -3.5);
     }
 
     #[test]
