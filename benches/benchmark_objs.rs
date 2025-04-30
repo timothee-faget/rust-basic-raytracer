@@ -1,13 +1,14 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use ray_tracer::mods::{
+use rbpt::mods::{
     color::ColorRBG,
-    objs::{Intersection, Object3D, Plane, Sphere, Triangle},
+    material::Material,
+    objs::{Plane, Sphere, Triangle},
     position::Vect3,
-    render::{NewMaterial, Ray},
+    ray::{Intersection, Ray},
 };
 
 pub fn bench_intersection(c: &mut Criterion) {
-    let mat = NewMaterial::new(
+    let mat = Material::new(
         ColorRBG::BLACK,
         ColorRBG::BLACK,
         ColorRBG::BLACK,
@@ -22,7 +23,7 @@ pub fn bench_intersection(c: &mut Criterion) {
 }
 
 pub fn bench_sphere(c: &mut Criterion) {
-    let mat = NewMaterial::new(
+    let mat = Material::new(
         ColorRBG::BLACK,
         ColorRBG::BLACK,
         ColorRBG::BLACK,
@@ -35,15 +36,15 @@ pub fn bench_sphere(c: &mut Criterion) {
     let ray_test_2 = Ray::new(Vect3::new(0.0, 0.0, 10.0), Vect3::FORWARD);
 
     c.bench_function("sphere_intersection_1", |b| {
-        b.iter(|| sphere_test.intersect(&ray_test_1))
+        b.iter(|| sphere_test.intersect(&ray_test_1, 10000.0))
     });
     c.bench_function("sphere_intersection_2", |b| {
-        b.iter(|| sphere_test.intersect(&ray_test_2))
+        b.iter(|| sphere_test.intersect(&ray_test_2, 10000.0))
     });
 }
 
 pub fn bench_plane(c: &mut Criterion) {
-    let mat = NewMaterial::new(
+    let mat = Material::new(
         ColorRBG::BLACK,
         ColorRBG::BLACK,
         ColorRBG::BLACK,
@@ -56,15 +57,15 @@ pub fn bench_plane(c: &mut Criterion) {
     let ray_test_2 = Ray::new(Vect3::new(0.0, 1.0, 0.0), Vect3::DOWN);
 
     c.bench_function("plane_intersection_1", |b| {
-        b.iter(|| plane_test.intersect(&ray_test_1))
+        b.iter(|| plane_test.intersect(&ray_test_1, 10000.0))
     });
     c.bench_function("plane_intersection_2", |b| {
-        b.iter(|| plane_test.intersect(&ray_test_2))
+        b.iter(|| plane_test.intersect(&ray_test_2, 10000.0))
     });
 }
 
 pub fn bench_triangle(c: &mut Criterion) {
-    let mat = NewMaterial::new(
+    let mat = Material::new(
         ColorRBG::BLACK,
         ColorRBG::BLACK,
         ColorRBG::BLACK,
@@ -82,10 +83,10 @@ pub fn bench_triangle(c: &mut Criterion) {
     let ray_test_2 = Ray::new(Vect3::new(0.0, 0.0, 1.0), Vect3::BACKWARD);
 
     c.bench_function("triangle_intersection_1", |b| {
-        b.iter(|| triangle_test.intersect(&ray_test_1))
+        b.iter(|| triangle_test.intersect(&ray_test_1, 10000.0))
     });
     c.bench_function("triangle_intersection_2", |b| {
-        b.iter(|| triangle_test.intersect(&ray_test_2))
+        b.iter(|| triangle_test.intersect(&ray_test_2, 10000.0))
     });
 }
 

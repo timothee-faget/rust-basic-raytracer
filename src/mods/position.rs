@@ -2,8 +2,7 @@ use core::f64;
 use core::f64::consts::PI;
 use std::ops::{Add, Div, Mul, Sub};
 
-// Vectors
-
+/// 3D vector implementation
 #[derive(Debug, Copy, Clone)]
 pub struct Vect3 {
     pub x: f64,
@@ -12,10 +11,21 @@ pub struct Vect3 {
 }
 
 impl Vect3 {
+    /// New vector creator
     pub fn new(x: f64, y: f64, z: f64) -> Self {
-        Vect3 { x, y, z }
+        Self { x, y, z }
     }
 
+    /// Creates vector from array
+    pub fn from_arr(arr: [f64; 3]) -> Self {
+        Self {
+            x: arr[0],
+            y: arr[1],
+            z: arr[2],
+        }
+    }
+
+    /// Cross product beteen 2 vectors
     #[inline]
     pub fn prod(self, other: Self) -> Self {
         Vect3 {
@@ -25,53 +35,73 @@ impl Vect3 {
         }
     }
 
+    /// Length of a vector
     #[inline]
     pub fn norm(&self) -> f64 {
         (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
     }
 
+    /// Length of a vector
     #[inline]
-    pub fn normalize(&self) -> Vect3 {
+    pub fn normalize(&self) -> Self {
         self * (1.0 / self.norm())
     }
 
+    /// Dot product of 2 vectors
     #[inline]
-    pub fn dot(&self, other: &Vect3) -> f64 {
+    pub fn dot(&self, other: &Self) -> f64 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
-    // Defaults
+    /// 3D vector to f64 array
+    #[inline]
+    pub fn to_arr(&self) -> [f64; 3] {
+        [self.x, self.y, self.z]
+    }
 
+    /// Default ZERO vectoryy
     pub const ZERO: Self = Self {
         x: 0.0,
         y: 0.0,
         z: 0.0,
     };
+
+    /// Default UP vectoryy
     pub const UP: Self = Self {
         x: 0.0,
         y: 1.0,
         z: 0.0,
     };
+
+    /// Default RIGHT vectoryy
     pub const RIGHT: Self = Self {
         x: 1.0,
         y: 0.0,
         z: 0.0,
     };
+
+    /// Default FORWARD vectoryy
     pub const FORWARD: Self = Self {
         x: 0.0,
         y: 0.0,
         z: 1.0,
     };
+
+    /// Default DOWN vectoryy
     pub const DOWN: Self = Self {
         x: 0.0,
         y: -1.0,
         z: 0.0,
     };
+
+    /// Default LEFT vectoryy
     pub const LEFT: Self = Self {
         x: -1.0,
         y: 0.0,
         z: 0.0,
     };
+
+    /// Default BACKWARD vectoryy
     pub const BACKWARD: Self = Self {
         x: 0.0,
         y: 0.0,
@@ -208,13 +238,13 @@ impl Mul for Vect3 {
     }
 }
 
+/// 3D vectoer lerper
 #[inline]
 pub fn lerp(vect_1: Vect3, vect_2: Vect3, t: f64) -> Vect3 {
     vect_1 + t * (vect_2 - vect_1)
 }
 
-// Quaternion stuff
-
+/// Quaternion implementation
 #[derive(Debug, Clone, Copy)]
 pub struct Quat {
     w: f64,
@@ -222,10 +252,12 @@ pub struct Quat {
 }
 
 impl Quat {
+    /// New quaternion constructor
     pub fn new(w: f64, v: Vect3) -> Quat {
         Quat { w, v }
     }
 
+    /// Identity (no rotation no scaling)
     #[inline]
     pub fn identity() -> Self {
         Quat {
@@ -234,6 +266,7 @@ impl Quat {
         }
     }
 
+    /// Creates quaternion from axis and angle (rad)
     pub fn from_axis_angle(axis: Vect3, angle: f64) -> Self {
         let half_angle = Angle::new(angle / 2.0);
         let half_angle_sin = half_angle.sin();
@@ -243,6 +276,7 @@ impl Quat {
         }
     }
 
+    /// Creates quaternion from axis and angle (deg)
     pub fn from_axis_angle_deg(axis: Vect3, angle: f64) -> Self {
         let half_angle = Angle::from_deg(angle / 2.0);
         let half_angle_sin = half_angle.sin();
@@ -252,6 +286,7 @@ impl Quat {
         }
     }
 
+    /// Normalizes quaternion
     #[inline]
     pub fn normalize(self) -> Self {
         let norm =
@@ -267,6 +302,7 @@ impl Quat {
         }
     }
 
+    /// Conjugates quaternion
     #[inline]
     pub fn conjugate(self) -> Self {
         Quat {
@@ -275,6 +311,7 @@ impl Quat {
         }
     }
 
+    /// Rotates a 3D vcetor from self
     #[inline]
     pub fn rotate(self, v: Vect3) -> Vect3 {
         let q_v = Quat { w: 0.0, v };
@@ -300,8 +337,7 @@ impl Mul for Quat {
     }
 }
 
-// Transform stuff
-
+/// Transform implementation
 #[derive(Debug, Clone, Copy)]
 pub struct Transform {
     position: Vect3,
@@ -309,62 +345,69 @@ pub struct Transform {
 }
 
 impl Transform {
+    /// Transform constructor
     pub fn new(position: Vect3, rotation: Quat) -> Transform {
         Transform { position, rotation }
     }
 
-    // Setters
-
+    /// Adds rotation
     pub fn rotate(&mut self, rot: Quat) {
         self.rotation = rot * self.rotation;
     }
 
+    /// Rotates around X axis from angle (deg)
     pub fn rotate_around_x_axis_deg(&mut self, angle: f64) {
         let rot = Quat::from_axis_angle_deg(self.get_x_axis(), angle);
         self.rotation = rot * self.rotation;
     }
 
+    /// Rotates around Y axis from angle (deg)
     pub fn rotate_around_y_axis_deg(&mut self, angle: f64) {
         let rot = Quat::from_axis_angle_deg(self.get_y_axis(), angle);
         self.rotation = rot * self.rotation;
     }
 
+    /// Rotates around Z axis from angle (deg)
     pub fn rotate_around_z_axis_deg(&mut self, angle: f64) {
         let rot = Quat::from_axis_angle_deg(self.get_z_axis(), angle);
         self.rotation = rot * self.rotation;
     }
-    // Getters
 
+    /// Get transform position
     #[inline]
     pub fn get_pos(&self) -> Vect3 {
         self.position
     }
 
+    /// Get transform X axis
     pub fn get_x_axis(&self) -> Vect3 {
         self.rotation.rotate(Vect3::RIGHT)
     }
 
+    /// Get transform Y axis
     pub fn get_y_axis(&self) -> Vect3 {
         self.rotation.rotate(Vect3::UP)
     }
 
+    /// Get transform Z axis
     pub fn get_z_axis(&self) -> Vect3 {
         self.rotation.rotate(Vect3::FORWARD)
     }
 }
 
-// Angle Stuff
-
+/// Angle implementation
 #[derive(Clone, Copy)]
 pub struct Angle {
     value: f64,
 }
 
 impl Angle {
+    /// New angle constructor
     pub fn new(value: f64) -> Angle {
         Angle { value }
     }
 
+    /// Creates angle from deg value
     #[inline]
     pub fn from_deg(value_deg: f64) -> Angle {
         Angle {
@@ -372,20 +415,24 @@ impl Angle {
         }
     }
 
+    /// Get value
     pub fn get(&self) -> f64 {
         self.value
     }
 
+    /// Get angle cos
     #[inline]
     pub fn cos(&self) -> f64 {
         self.value.cos()
     }
 
+    /// Get angle sin
     #[inline]
     pub fn sin(&self) -> f64 {
         self.value.sin()
     }
 
+    /// Get angle tan
     #[inline]
     pub fn tan(&self) -> f64 {
         self.value.tan()
@@ -421,8 +468,6 @@ impl Mul<Angle> for f64 {
         }
     }
 }
-
-// Tests
 
 #[cfg(test)]
 mod tests_quaternions {

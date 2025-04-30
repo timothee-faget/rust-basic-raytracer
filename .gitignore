@@ -1,6 +1,9 @@
 /target
 *.ppm
 *.pbm
+*.jpg
 *.svg
 /old
+/old_outputs
 /perf/*.txt
+*.DS_Store

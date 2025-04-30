@@ -1,14 +1,16 @@
-use std::{error::Error, fs, vec};
+use std::{error::Error, fs};
+
+use console::style;
 
 use super::{
     color::ColorRBG,
-    objs::{Cube, Object3D, Plane, Sphere, Triangle},
+    material::Material,
+    objs::{create_cube_triangles, Camera, Plane, Sphere, Triangle},
     position::{Angle, Quat, Vect3},
-    render::{Camera, Material, Scene},
+    render::Scene,
 };
 
-// Tokeneiser stuff
-
+/// Tokeneiser enum
 #[derive(Debug, Clone, PartialEq)]
 enum Token {
     Identifier(String),
@@ -19,8 +21,7 @@ enum Token {
     Newline,
 }
 
-// Parser stuff
-
+/// Parser implementation
 pub struct Parser {
     tokens: Vec<Token>,
     materials: Vec<(String, Material)>,
@@ -28,36 +29,32 @@ pub struct Parser {
 }
 
 impl Parser {
+    /// Build parser from text file
     pub fn build(filename: &str) -> Result<Self, Box<dyn Error>> {
-        println!("== Parsing file : {}", filename);
         let mut parser = Self {
             tokens: vec![],
             materials: vec![],
             pos: 0,
         };
 
+        if filename.ends_with(".rtp") {
+            println!(
+                "{} Parsing scene file : {}",
+                style("[1/3]").bold().green(),
+                style(filename).italic().dim()
+            );
+        } else if filename.ends_with(".obj") {
+            println!(
+                "        - Parsing mesh file : {}",
+                style(filename).italic().dim()
+            );
+        }
         let file_content: &str = &fs::read_to_string(filename)?;
         parser.tokenize(file_content);
         Ok(parser)
     }
 
-    fn peek(&self) -> Option<&Token> {
-        self.tokens.get(self.pos)
-    }
-
-    fn next(&mut self) -> Option<&Token> {
-        let tok = self.tokens.get(self.pos);
-        self.pos += 1;
-        tok
-    }
-
-    fn expect(&mut self, expected: &Token) {
-        let token = self.next().expect("Unexpected end of input");
-        if token != expected {
-            panic!("Expected {:?}, got {:?}", expected, token);
-        }
-    }
-
+    /// Tokenize text file
     fn tokenize(&mut self, input: &str) {
         let mut chars = input.chars().peekable();
 
@@ -98,7 +95,7 @@ impl Parser {
                 c if c.is_alphabetic() => {
                     let mut ident = String::new();
                     while let Some(&c) = chars.peek() {
-                        if c.is_alphanumeric() || c == '_' {
+                        if c.is_alphanumeric() || c == '_' || c == '.' || c == '/' {
                             ident.push(c);
                             chars.next();
                         } else {
@@ -122,9 +119,37 @@ impl Parser {
         }
     }
 
+    // Iteration functions
+
+    /// Peek current token
+    fn peek(&self) -> Option<&Token> {
+        self.tokens.get(self.pos)
+    }
+
+    /// Get next token
+    fn next(&mut self) -> Option<&Token> {
+        let tok = self.tokens.get(self.pos);
+        self.pos += 1;
+        tok
+    }
+
+    /// Expect token
+    fn expect(&mut self, expected: &Token) {
+        let token = self.next().expect("Unexpected end of input");
+        if token != expected {
+            panic!("Expected {:?}, got {:?}", expected, token);
+        }
+    }
+
+    // Specific parsers
+
+    /// Parse Scene
     pub fn parse_scene(&mut self) -> Scene {
         let mut cameras: Vec<Camera> = vec![];
-        let mut objects: Vec<Box<dyn Object3D>> = vec![];
+        //let mut objects: Vec<Object> = vec![];
+        let mut spheres: Vec<Sphere> = vec![];
+        let mut planes: Vec<Plane> = vec![];
+        let mut triangles: Vec<Triangle> = vec![];
 
         while let Some(token) = self.peek() {
             match token {
@@ -139,19 +164,29 @@ impl Parser {
                 }
                 Token::Identifier(name) if name == "sphere" => {
                     self.next();
-                    objects.push(Box::new(self.parse_sphere()));
+                    spheres.push(self.parse_sphere());
                 }
                 Token::Identifier(name) if name == "plane" => {
                     self.next();
-                    objects.push(Box::new(self.parse_plane()));
+                    planes.push(self.parse_plane());
                 }
                 Token::Identifier(name) if name == "triangle" => {
                     self.next();
-                    objects.push(Box::new(self.parse_triangle()));
+                    triangles.push(self.parse_triangle());
                 }
                 Token::Identifier(name) if name == "cube" => {
                     self.next();
-                    objects.push(Box::new(self.parse_cube()));
+                    let cube = self.parse_cube();
+                    for tri in cube {
+                        triangles.push(tri);
+                    }
+                }
+                Token::Identifier(name) if name == "mesh" => {
+                    self.next();
+                    let mesh_triangles = self.parse_mesh();
+                    for tri in mesh_triangles {
+                        triangles.push(tri);
+                    }
                 }
                 Token::Newline => {
                     self.next();
@@ -162,17 +197,18 @@ impl Parser {
             }
         }
 
-        Scene::new(cameras[0].clone(), objects) // Il faudrait trouver un moyen de
-                                                // supprimer le clone.
+        let scene = Scene::new(cameras[0].clone(), spheres, planes, triangles);
+        scene.get_info();
+        scene
     }
 
+    /// Parse Camera
     fn parse_camera(&mut self) -> Camera {
         self.expect(&Token::LBrace);
         let mut position = Vect3::ZERO;
         let mut rotation = Quat::identity();
         let mut focal = 1.0;
         let mut fov = Angle::new(0.0);
-        let mut resolution = (800, 600);
 
         while let Some(token) = self.peek() {
             match token {
@@ -196,12 +232,7 @@ impl Parser {
                     self.expect(&Token::Colon);
                     fov = self.parse_angle();
                 }
-                Token::Identifier(name) if name == "resolution" => {
-                    self.next();
-                    self.expect(&Token::Colon);
-                    let vals = self.parse_f64_array(2);
-                    resolution = (vals[0] as u32, vals[1] as u32);
-                }
+
                 Token::RBrace => {
                     self.next();
                     break;
@@ -213,9 +244,10 @@ impl Parser {
             }
         }
 
-        Camera::build(position, rotation, focal, fov, resolution.0, resolution.1)
+        Camera::build(position, rotation, focal, fov, 160, 90)
     }
 
+    /// Parse Material
     fn parse_material(&mut self) -> (String, Material) {
         self.expect(&Token::LBrace);
         let mut name = String::new();
@@ -287,6 +319,7 @@ impl Parser {
         )
     }
 
+    /// Parse Sphere
     fn parse_sphere(&mut self) -> Sphere {
         self.expect(&Token::LBrace);
         let mut position = Vect3::ZERO;
@@ -324,6 +357,7 @@ impl Parser {
         Sphere::new(position, radius, self.get_material(name))
     }
 
+    /// Parse Plane
     fn parse_plane(&mut self) -> Plane {
         self.expect(&Token::LBrace);
         let mut point = Vect3::ZERO;
@@ -361,6 +395,7 @@ impl Parser {
         Plane::new(point, normal, self.get_material(name))
     }
 
+    /// Parse Triangle
     fn parse_triangle(&mut self) -> Triangle {
         self.expect(&Token::LBrace);
         let mut point_1 = Vect3::ZERO;
@@ -404,7 +439,8 @@ impl Parser {
         Triangle::new(point_1, point_2, point_3, self.get_material(name))
     }
 
-    fn parse_cube(&mut self) -> Cube {
+    /// Parse Cube
+    fn parse_cube(&mut self) -> Vec<Triangle> {
         self.expect(&Token::LBrace);
         let mut position = Vect3::ZERO;
         let mut rotation = Quat::identity();
@@ -444,9 +480,168 @@ impl Parser {
             }
         }
 
-        Cube::new(position, rotation, size, self.get_material(name))
+        create_cube_triangles(position, rotation, size, self.get_material(name))
     }
 
+    /// Parse mesh
+    fn parse_mesh(&mut self) -> Vec<Triangle> {
+        self.expect(&Token::LBrace);
+        let mut position = Vect3::ZERO;
+        let mut rotation = Quat::identity();
+        let mut triangles: Vec<Triangle> = vec![];
+        let mut mat_name = String::new();
+
+        while let Some(token) = self.peek() {
+            match token {
+                Token::Identifier(name) if name == "position" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    position = self.parse_vect3();
+                }
+                Token::Identifier(name) if name == "rotation" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    rotation = self.parse_quat();
+                }
+                Token::Identifier(name) if name == "obj_file" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    let file_name = self.parse_string();
+                    let mut obj_parser = Parser::build(&file_name).unwrap();
+                    triangles = obj_parser.parse_obj();
+                }
+                Token::Identifier(n) if n == "mat" => {
+                    self.next();
+                    self.expect(&Token::Colon);
+                    mat_name = self.parse_string();
+                }
+                Token::RBrace => {
+                    self.next();
+                    break;
+                }
+                Token::Newline => {
+                    self.next();
+                }
+                _ => panic!("Unexpected token in camera block: {:?}", token),
+            }
+        }
+
+        let mat = self.get_material(mat_name);
+
+        for triangle in triangles.iter_mut() {
+            triangle.rotate(rotation, position);
+            triangle.set_material(mat);
+        }
+
+        triangles
+    }
+
+    // Small parsers
+
+    /// Parse .obj file
+    pub fn parse_obj(&mut self) -> Vec<Triangle> {
+        let mut vertices: Vec<Vect3> = vec![];
+        let mut triangles: Vec<Triangle> = vec![];
+
+        while let Some(token) = self.peek() {
+            match token {
+                Token::Identifier(name) if name == "v" => {
+                    self.next();
+                    vertices.push(self.parse_vect3());
+                }
+                Token::Identifier(name) if name == "f" => {
+                    self.next();
+                    let face = self.parse_face();
+                    let point_1 = vertices[face[0] - 1];
+                    let point_2 = vertices[face[2] - 1];
+                    let point_3 = vertices[face[1] - 1];
+                    triangles.push(Triangle::new(
+                        point_1,
+                        point_2,
+                        point_3,
+                        Material::default(),
+                    ));
+                }
+                Token::Newline => {
+                    self.next();
+                }
+                _ => {
+                    panic!("Unexpected token: {:?}", token);
+                }
+            }
+        }
+
+        triangles
+    }
+
+    /// Parse f64 array
+    fn parse_f64_array(&mut self, count: usize) -> [f64; 4] {
+        let mut result = [0.0; 4];
+        for res in result.iter_mut().take(count) {
+            *res = self.parse_number();
+        }
+        result
+    }
+
+    /// Parse Vect3
+    fn parse_vect3(&mut self) -> Vect3 {
+        let data = self.parse_f64_array(3);
+        Vect3::new(data[0], data[1], data[2])
+    }
+
+    /// Parse obj face
+    fn parse_face(&mut self) -> [usize; 3] {
+        let mut face = [0; 3];
+        for res in face.iter_mut().take(3) {
+            *res = self.parse_int();
+        }
+        face
+    }
+
+    /// Parse Quat
+    fn parse_quat(&mut self) -> Quat {
+        let data = self.parse_f64_array(4);
+        Quat::new(data[0], Vect3::new(data[1], data[2], data[3]))
+    }
+
+    /// Parse f64 number
+    fn parse_number(&mut self) -> f64 {
+        match self.next() {
+            Some(Token::Number(n)) => *n,
+            other => panic!("Expected number, got {:?}", other),
+        }
+    }
+
+    /// Parse usize number
+    fn parse_int(&mut self) -> usize {
+        match self.next() {
+            Some(Token::Number(n)) => *n as usize,
+            other => panic!("Expected number, got {:?}", other),
+        }
+    }
+
+    /// Parse ColorRBG
+    fn parse_color(&mut self) -> ColorRBG {
+        let data = self.parse_f64_array(3);
+        ColorRBG::new(data[0], data[1], data[2])
+    }
+
+    /// Parse Angle
+    fn parse_angle(&mut self) -> Angle {
+        Angle::from_deg(self.parse_number())
+    }
+
+    /// Parse String
+    fn parse_string(&mut self) -> String {
+        match self.next() {
+            Some(Token::Identifier(name)) => String::from(name),
+            other => panic!("Expected material name, got {:?}", other),
+        }
+    }
+
+    // Helpers
+
+    /// Get material from its name
     fn get_material(&self, material_name: String) -> Material {
         if let Some(material) = self
             .materials
@@ -457,47 +652,6 @@ impl Parser {
             *material
         } else {
             Material::default()
-        }
-    }
-
-    fn parse_f64_array(&mut self, count: usize) -> [f64; 4] {
-        let mut result = [0.0; 4];
-        for res in result.iter_mut().take(count) {
-            *res = self.parse_number();
-        }
-        result
-    }
-
-    fn parse_vect3(&mut self) -> Vect3 {
-        let data = self.parse_f64_array(3);
-        Vect3::new(data[0], data[1], data[2])
-    }
-
-    fn parse_quat(&mut self) -> Quat {
-        let data = self.parse_f64_array(4);
-        Quat::new(data[0], Vect3::new(data[1], data[2], data[3]))
-    }
-
-    fn parse_number(&mut self) -> f64 {
-        match self.next() {
-            Some(Token::Number(n)) => *n,
-            other => panic!("Expected number, got {:?}", other),
-        }
-    }
-
-    fn parse_color(&mut self) -> ColorRBG {
-        let data = self.parse_f64_array(3);
-        ColorRBG::new(data[0], data[1], data[2])
-    }
-
-    fn parse_angle(&mut self) -> Angle {
-        Angle::from_deg(self.parse_number())
-    }
-
-    fn parse_string(&mut self) -> String {
-        match self.next() {
-            Some(Token::Identifier(name)) => String::from(name),
-            other => panic!("Expected material name, got {:?}", other),
         }
     }
 }

@@ -1,10 +1,13 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use ray_tracer::mods::{
+use rbpt::mods::{
     color::ColorRBG,
-    funcs::LCG,
+    image::ImageRGB,
+    material::Material,
+    objs::Camera,
     parser::Parser,
     position::{Angle, Quat, Vect3},
-    render::{Camera, ImageRGB, Material, Ray},
+    random::LCG,
+    ray::Ray,
 };
 
 pub fn bench_mat(c: &mut Criterion) {
@@ -46,19 +49,21 @@ pub fn bench_image(c: &mut Criterion) {
     c.bench_function("image_get_height", |b| b.iter(|| image.get_height()));
     c.bench_function("image_get_pixels", |b| b.iter(|| image.get_pixel_count()));
     c.bench_function("image_save_as_file", |b| {
-        b.iter(|| image.save_as_file("BENCH"))
+        b.iter(|| image.save_as_ppm("benches/bench_save_test"))
     });
 }
 
 pub fn bench_scene(c: &mut Criterion) {
-    let mut parser = Parser::build("scenes/bench_scene.rtp").unwrap();
+    let mut parser = Parser::build("benches/bench_scene.rtp").unwrap();
     let mut scene = parser.parse_scene();
 
     let ray = Ray::new(Vect3::new(0.0, 0.0, 20.0), Vect3::FORWARD);
     c.bench_function("scene_trace", |b| {
         b.iter(|| scene.trace(&ray, &mut LCG::new(123456789), 0))
     });
-    c.bench_function("scene_render", |b| b.iter(|| scene.render_bounces()));
+    c.bench_function("scene_render", |b| {
+        b.iter(|| scene.render(5, 5, (100, 100)))
+    });
 }
 
 criterion_group!(

@@ -1,0 +1,125 @@
+# Camera
+
+camera {
+    position: 0.0 3.0 15.0
+    rotation: 0.0 0.0 1.0 -0.05  # quaternion wxyz
+    focal_length: 5.0
+    fov: 30.0
+}
+
+# Materials 
+
+material {
+  name: mat_teapot
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 0.0 0.5
+  specular_color: 0.5 0.5 0.5
+  emission_strength: 0.0
+  smoothness: 0.4
+  specular_prob: 0.5
+}
+
+material {
+  name: mat_lampe_1
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 1.0 1.0
+  specular_color: 0.2 0.2 0.2
+  emission_strength: 1.0
+  smoothness: 0.0
+  specular_prob: 0.0
+}
+
+material {
+  name: mat_lampe_2
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 1.0 1.0
+  specular_color: 0.2 0.2 0.2
+  emission_strength: 1.0
+  smoothness: 0.0
+  specular_prob: 0.0
+}
+
+material {
+  name: mat_lampe_3
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 1.0 1.0
+  specular_color: 0.2 0.2 0.2
+  emission_strength: 1.0
+  smoothness: 0.0
+  specular_prob: 0.0
+}
+
+material {
+  name: mat_lampe_4
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 1.0 1.0
+  specular_color: 0.2 0.2 0.2
+  emission_strength: 1.0
+  smoothness: 0.0
+  specular_prob: 0.0
+}
+
+material {
+  name: mat_sol
+  color: 0.5 0.5 0.5
+  emission_color: 1.0 1.0 1.0
+  specular_color: 0.8 0.8 0.8
+  emission_strength: 0
+  smoothness: 0.3
+  specular_prob: 0.3
+}
+
+material {
+  name: mat_mur_lum
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 1.0 1.0
+  specular_color: 0.2 0.2 0.2
+  emission_strength: 0.3
+  smoothness: 0.2
+  specular_prob: 0.2
+}
+
+plane {
+  point: 0.0 0.0 0.0
+  normal: 0.0 1.0 0.0
+  mat: mat_sol
+}
+
+# Spheres
+
+sphere {
+    position: 4.0 8.0 4.0
+    radius: 3.0
+    mat: mat_lampe_4
+}
+
+sphere {
+    position: -4.0 8.0 4.0
+    radius: 3.0
+    mat: mat_lampe_3
+}
+
+sphere {
+    position: 4.0 8.0 -4.0
+    radius: 3.0
+    mat: mat_lampe_2
+}
+
+sphere {
+    position: -4.0 8.0 -4.0
+    radius: 3.0
+    mat: mat_lampe_1
+}
+
+sphere {
+  position: 0.0 2.0 0.0
+  radius: 1.0
+  mat: mat_teapot
+}
+
+mesh {
+  position: 0.0 0.0 0.0
+  rotation: 0.9 0.0 -0.38 0.0
+  obj_file: obj/teapot.obj
+  mat: mat_teapot 
+}

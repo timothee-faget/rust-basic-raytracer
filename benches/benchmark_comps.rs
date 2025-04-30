@@ -1,8 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use ray_tracer::mods::{
+use rbrt::mods::{
     color::{lerp_color, ColorRBG},
-    funcs::{reflect, solve_quadratic, LCG},
+    funcs::{reflect, solve_quadratic},
     position::{lerp, Quat, Vect3},
+    random::LCG,
 };
 
 pub fn bench_vect3(c: &mut Criterion) {

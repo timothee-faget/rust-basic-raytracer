@@ -1,15 +1,13 @@
 # Camera
+
 camera {
     position: 0.0 3.0 15.0
     rotation: 0.0 0.0 1.0 -0.05  # quaternion wxyz
     focal_length: 5.0
     fov: 30.0
-    # resolution: 3840 2160
-    resolution: 1920 1080
-    # resolution: 1280 720
-    # resolution: 720 480
-    # resolution: 360 240
 }
+
+# Materials
 
 material {
   name: mat_plan
@@ -22,7 +20,7 @@ material {
 }
 
 material {
-  name: mat_plan_1
+  name: mat_sphere
   color: 0.7 0.7 0.7
   emission_color: 1.0 1.0 0.5
   specular_color: 0.2 0.2 0.2
@@ -30,6 +28,8 @@ material {
   smoothness: 0
   specular_prob: 0
 }
+
+# Planes
 
 plane {
   point: 0.0 15.0 0.0
@@ -61,8 +61,10 @@ plane {
   mat: mat_plan
 }
 
+# Spheres
+
 sphere {
     position: 0.0 0.0 0.0
     radius: 1.0
-    mat: mat_plan_1
+    mat: mat_sphere
 }

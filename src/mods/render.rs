@@ -1,39 +1,57 @@
 use core::f64;
 use std::error::Error;
-use std::fs::File;
-use std::io::prelude::*;
 
+use console::style;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
-use crate::mods::color::ColorRBGOF;
+use crate::mods::funcs::s_to_hms;
 
-use super::color::lerp_color;
-use super::constants::BIAS;
-use super::constants::MAX_BOUNCES;
-use super::constants::RENDER_ITERATIONS;
-use super::objs::Intersection;
 use super::{
-    color::ColorRBG,
-    funcs::LCG,
-    objs::Object3D,
-    position::{lerp, Angle, Quat, Transform, Vect3},
+    color::{lerp_color, ColorRBG, ColorRBGOF},
+    objs::{Camera, Plane, Sphere, Triangle},
+    position::lerp,
+    random::LCG,
+    ray::{Intersection, Ray},
 };
 
-// Scene stuff
+static BIAS: f64 = 1e-5;
 
+/// Scene implementation
 pub struct Scene {
-    camera: Camera,
-    objects: Vec<Box<dyn Object3D>>,
+    pub camera: Camera,
+    pub spheres: Vec<Sphere>,
+    pub planes: Vec<Plane>,
+    pub triangles: Vec<Triangle>,
+    render_iterations: usize,
+    max_bounces: u32,
 }
 
 impl Scene {
-    pub fn new(camera: Camera, objects: Vec<Box<dyn Object3D>>) -> Scene {
-        Scene { camera, objects }
+    /// New Scene constructor
+    pub fn new(
+        camera: Camera,
+        spheres: Vec<Sphere>,
+        planes: Vec<Plane>,
+        triangles: Vec<Triangle>,
+    ) -> Scene {
+        Scene {
+            camera,
+            spheres,
+            planes,
+            triangles,
+            render_iterations: 10,
+            max_bounces: 10,
+        }
     }
 
-    pub fn render_bounces(&mut self) {
-        println!("== Rendering scene");
+    /// Render Scene
+    pub fn render(&mut self, render_iterations: usize, max_bounces: u32, resolution: (u32, u32)) {
+        print_render_info(render_iterations, max_bounces, resolution.0, resolution.1);
+        self.render_iterations = render_iterations;
+        self.max_bounces = max_bounces;
+        self.camera.set_image_resolution(resolution.0, resolution.1);
+
         let camera_pos = self.camera.transform.get_pos();
         let camera_axis = (
             self.camera.transform.get_x_axis(),
@@ -46,12 +64,13 @@ impl Scene {
         let mut acc_buffer = vec![ColorRBGOF::BLACK; width * height];
 
         let scene = &self;
-        let bar = ProgressBar::new(RENDER_ITERATIONS as u64);
+        let bar = ProgressBar::new(self.render_iterations as u64);
         bar.set_style(ProgressStyle::default_bar().template(
             "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} ({percent}%) | ETA: {eta}",
         ).unwrap().progress_chars("##-"));
 
-        for f in 0..RENDER_ITERATIONS {
+        bar.inc(0);
+        for f in 0..self.render_iterations {
             let all_pixels: Vec<(usize, usize)> = (0..width)
                 .flat_map(|x| (0..height).map(move |y| (x, y)))
                 .collect();
@@ -82,39 +101,39 @@ impl Scene {
             bar.inc(1);
         }
 
-        bar.finish_with_message("Rendu terminé!");
-
+        //bar.finish_with_message("Rendu terminé!");
+        let coeff = 1.0 / self.render_iterations as f64;
         for y in 0..height {
             for x in 0..width {
                 let idx = y * width + x;
-                let avg_color = ((1.0 / RENDER_ITERATIONS as f64) * acc_buffer[idx]).to_rgb();
+                let avg_color = (coeff * acc_buffer[idx]).to_rgb();
                 self.camera.image.set_pixel(x, y, avg_color.rgb());
             }
         }
+
+        let render_time = bar.elapsed();
+        bar.finish_and_clear();
+        println!(
+            "      Rendered scene in {}",
+            style(s_to_hms(render_time.as_secs_f64())).bold().white()
+        );
     }
 
+    /// Trace ray
     pub fn trace(&self, ray: &Ray, randomizer: &mut LCG, bounce: u32) -> ColorRBG {
-        if bounce > MAX_BOUNCES {
+        if bounce > self.max_bounces {
             return ColorRBG::BLACK;
         }
 
-        let mut closest_intersection: Option<Intersection> = None;
-        let mut min_distance = f64::INFINITY;
-
-        for object in &self.objects {
-            if let Some(hit) = object.intersect(ray) {
-                if hit.distance > 1e-5 && hit.distance < min_distance {
-                    min_distance = hit.distance;
-                    closest_intersection = Some(hit);
-                }
-            }
-        }
+        let closest_intersection = self.get_intersection(ray);
 
         if let Some(inter) = closest_intersection {
             let is_specular = inter.material.specular_prob >= randomizer.next_f64();
 
-            let dot = ray.direction * inter.normal;
-            let specular_dir = (ray.direction - 2.0 * inter.normal * dot).normalize();
+            let rd = ray.get_dir();
+
+            let dot = rd * inter.normal;
+            let specular_dir = (rd - 2.0 * inter.normal * dot).normalize();
 
             let diffuse_dir =
                 (inter.normal + randomizer.next_normal_vect3(inter.normal)).normalize();
@@ -136,7 +155,6 @@ impl Scene {
                 is_specular as u8 as f64,
             );
 
-            // Estimation d'importance / Russian roulette
             let p = reflectance.max_component().clamp(0.1, 1.0);
             if randomizer.next_f64() >= p {
                 return emitted;
@@ -149,183 +167,74 @@ impl Scene {
         }
     }
 
-    pub fn add_object(&mut self, object: Box<dyn Object3D>) {
-        self.objects.push(object);
-    }
+    /// Get Intersection of Ray with Scene's objects
+    fn get_intersection(&self, ray: &Ray) -> Option<Intersection> {
+        let mut closest_intersection: Option<Intersection> = None;
+        let mut min_distance = f64::INFINITY;
 
-    pub fn save_image(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
-        println!("== Saving scene");
-        self.camera.image.save_as_file(filename)?;
-        Ok(())
-    }
-}
-
-// Camera stuff
-
-#[derive(Clone)]
-pub struct Camera {
-    pub transform: Transform,
-    focal: f64,
-    fov: Angle,
-    image: ImageRGB,
-}
-
-impl Camera {
-    pub fn new(position: Vect3, rotation: Quat, focal: f64, fov: Angle, image: ImageRGB) -> Camera {
-        Camera {
-            transform: Transform::new(position, rotation),
-            focal,
-            fov,
-            image,
-        }
-    }
-
-    pub fn build(
-        position: Vect3,
-        rotation: Quat,
-        focal: f64,
-        fov: Angle,
-        w: u32,
-        h: u32,
-    ) -> Camera {
-        Camera {
-            transform: Transform::new(position, rotation),
-            focal,
-            fov,
-            image: ImageRGB::new(w, h),
-        }
-    }
-
-    pub fn get_ray_direction(
-        &self,
-        camera_axis: (Vect3, Vect3, Vect3),
-        x: usize,
-        y: usize,
-    ) -> Vect3 {
-        let w = 2.0 * (self.fov / 2.0).tan() * self.focal;
-        let h = (self.image.get_height() as f64 / self.image.get_width() as f64) * w;
-        let alpha = w / (self.image.get_width() as f64);
-        let coeff_a = -(x as f64) * alpha + w / 2.0;
-        let coeff_b = -(y as f64) * alpha + h / 2.0;
-        (coeff_a * camera_axis.0 + coeff_b * camera_axis.1 + self.focal * camera_axis.2).normalize()
-    }
-}
-
-// Material stuff
-
-#[derive(Debug, Clone, Copy)]
-pub struct Material {
-    pub color: ColorRBG,
-    pub emission_color: ColorRBG,
-    pub specular_color: ColorRBG,
-    pub emission_strengh: f64,
-    pub smoothness: f64,
-    pub specular_prob: f64,
-}
-
-impl Material {
-    pub fn new(
-        color: ColorRBG,
-        emission_color: ColorRBG,
-        specular_color: ColorRBG,
-        emission_strengh: f64,
-        smoothness: f64,
-        specular_prob: f64,
-    ) -> Self {
-        Self {
-            color,
-            emission_color,
-            specular_color,
-            emission_strengh,
-            smoothness,
-            specular_prob,
-        }
-    }
-
-    #[inline]
-    pub fn get_emited_light(&self) -> ColorRBG {
-        self.emission_strengh.min(1.0) * self.emission_color
-    }
-}
-
-impl Default for Material {
-    fn default() -> Self {
-        Material {
-            color: ColorRBG::WHITE,
-            emission_color: ColorRBG::WHITE,
-            specular_color: ColorRBG::WHITE,
-            emission_strengh: 0.0,
-            smoothness: 0.5,
-            specular_prob: 0.5,
-        }
-    }
-}
-
-// Ray stuff
-
-pub struct Ray {
-    pub start: Vect3,
-    pub direction: Vect3,
-}
-
-impl Ray {
-    pub fn new(start: Vect3, direction: Vect3) -> Ray {
-        Ray { start, direction }
-    }
-
-    pub fn get_dir(&self) -> Vect3 {
-        self.direction
-    }
-}
-
-// Image stuff
-
-#[derive(Clone)]
-pub struct ImageRGB {
-    data: Vec<Vec<(u8, u8, u8)>>,
-}
-
-impl ImageRGB {
-    pub fn new(w: u32, h: u32) -> Self {
-        let line = vec![(255, 255, 255); w as usize];
-        ImageRGB {
-            data: vec![line; h as usize],
-        }
-    }
-
-    #[inline]
-    pub fn get_width(&self) -> usize {
-        self.data[0].len()
-    }
-
-    #[inline]
-    pub fn get_height(&self) -> usize {
-        self.data.len()
-    }
-
-    #[inline]
-    pub fn get_pixel_count(&self) -> usize {
-        self.data.len() * self.data[0].len()
-    }
-
-    #[inline]
-    pub fn set_pixel(&mut self, x: usize, y: usize, value: (u8, u8, u8)) {
-        self.data[y][x] = value;
-    }
-
-    pub fn save_as_file(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
-        let mut file = File::create(format!("{}.ppm", filename))?;
-        let header = format!("P3\n{} {}\n255\n", self.data[0].len(), self.data.len());
-
-        file.write_all(header.as_bytes())?;
-
-        let mut content = String::new();
-        for line in self.data.iter() {
-            for el in line {
-                content += format!("{} {} {}\n", el.0, el.1, el.2).as_str();
+        for sphere in &self.spheres {
+            if let Some(hit) = sphere.intersect(ray, min_distance) {
+                if hit.distance > BIAS && hit.distance < min_distance {
+                    min_distance = hit.distance;
+                    closest_intersection = Some(hit);
+                }
             }
         }
-        file.write_all(content.as_bytes())?;
+        for plane in &self.planes {
+            if let Some(hit) = plane.intersect(ray, min_distance) {
+                if hit.distance > BIAS && hit.distance < min_distance {
+                    min_distance = hit.distance;
+                    closest_intersection = Some(hit);
+                }
+            }
+        }
+
+        for triangle in &self.triangles {
+            if let Some(hit) = triangle.intersect(ray, min_distance) {
+                if hit.distance > BIAS && hit.distance < min_distance {
+                    min_distance = hit.distance;
+                    closest_intersection = Some(hit);
+                }
+            }
+        }
+        closest_intersection
+    }
+
+    /// Prints Scene information
+    pub fn get_info(&self) {
+        println!("      Parsed scene containing :");
+        println!(
+            "        - {} speres",
+            style(self.spheres.len()).bold().blue()
+        );
+        println!(
+            "        - {} planes",
+            style(self.planes.len()).bold().blue()
+        );
+        println!(
+            "        - {} triangles",
+            style(self.triangles.len()).bold().blue()
+        );
+    }
+
+    /// Save Scene image to ppm file
+    pub fn save_image(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
+        self.camera.image.save_as_ppm(filename)?;
         Ok(())
     }
+}
+
+/// Prints render information
+fn print_render_info(ri: usize, mb: u32, w: u32, h: u32) {
+    println!(
+        "{} Rendering scene with these parameters :",
+        style("[2/3]").bold().green()
+    );
+    println!("        - Iterations : {}", style(ri).bold().blue());
+    println!("        - Max bounces : {}", style(mb).bold().blue());
+    println!(
+        "        - Image resolution : {} x {} pixels",
+        style(w).bold().blue(),
+        style(h).bold().blue()
+    );
 }

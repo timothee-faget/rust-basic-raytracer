@@ -1,7 +1,11 @@
 pub mod color;
-pub mod constants;
+pub mod config;
 pub mod funcs;
+pub mod image;
+pub mod material;
 pub mod objs;
 pub mod parser;
 pub mod position;
+pub mod random;
+pub mod ray;
 pub mod render;

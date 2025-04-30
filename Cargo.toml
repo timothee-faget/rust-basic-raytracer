@@ -1,12 +1,14 @@
 [package]
-name = "ray_tracer"
-version = "0.5.0"
+name = "rbpt"
+version = "1.0.0"
 edition = "2021"
 
 [dependencies]
 rayon = "1.10"
 indicatif = "0.17.11"
-glam = "0.30.2"
+clap = "4.5.37"
+console = "0.15.11"
+
 
 [dev-dependencies]
 approx = "0.5.1"
