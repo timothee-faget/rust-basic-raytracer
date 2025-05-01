@@ -11,6 +11,10 @@ impl LCG {
         LCG { state: seed }
     }
 
+    pub fn set_seed(&mut self, seed: u64) {
+        self.state = seed;
+    }
+
     /// Get next state
     #[inline]
     fn next(&mut self) -> u64 {
@@ -65,7 +69,7 @@ mod tests_funcs {
         let mut rand = LCG::new(213456789);
 
         for _ in 0..100 {
-            assert!(rand.next_normal_vect3(normal).y >= 0.0);
+            assert!(rand.next_normal_vect3(normal).y() >= 0.0);
         }
     }
 }

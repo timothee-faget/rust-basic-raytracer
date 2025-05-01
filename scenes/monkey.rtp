@@ -1,10 +1,10 @@
 # Camera
 
 camera {
-    position: 0.0 3.0 15.0
-    rotation: 0.0 0.0 1.0 -0.05  # quaternion wxyz
+    position: 0.0 2.75 15.0
+    rotation: 0.0 0.0 1.0 -0.07  # quaternion wxyz
     focal_length: 5.0
-    fov: 30.0
+    fov: 15.0
 }
 
 # Materials 
@@ -13,10 +13,10 @@ material {
   name: mat_teapot
   color: 1.0 1.0 1.0
   emission_color: 1.0 0.0 0.5
-  specular_color: 0.5 0.5 0.5
+  specular_color: 1.0 1.0 1.0
   emission_strength: 0.0
-  smoothness: 0.4
-  specular_prob: 0.5
+  smoothness: 0.3
+  specular_prob: 0.3
 }
 
 material {
@@ -71,12 +71,12 @@ material {
 
 material {
   name: mat_sol
-  color: 0.8 0.8 0.8
+  color: 1.0 1.0 1.0
   emission_color: 1.0 1.0 1.0
   specular_color: 1.0 1.0 1.0
   emission_strength: 0
-  smoothness: 1.0
-  specular_prob: 0.6
+  smoothness: 0.0
+  specular_prob: 0.0
 }
 
 material {
@@ -181,6 +181,6 @@ triangle {
 mesh {
   position: 0.0 0.0 0.0
   rotation: 0.9 0.0 -0.26 0.0
-  obj_file: obj/teapot.obj
+  obj_file: obj/monkey.obj
   mat: mat_teapot 
 }

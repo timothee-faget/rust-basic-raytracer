@@ -89,10 +89,12 @@ impl Sphere {
     pub fn intersect(&self, ray: &Ray, min_distance: f64) -> Option<Intersection> {
         let rd = ray.get_dir();
         let rs = ray.get_start();
+        let pos = self.transform.get_pos();
+        let rs_pos = rs - pos;
+
         let a = rd * rd;
-        let b = 2.0 * (rd * (rs - self.transform.get_pos()));
-        let c = (rs - self.transform.get_pos()) * (rs - self.transform.get_pos())
-            - self.radius * self.radius;
+        let b = 2.0 * (rd * rs_pos);
+        let c = rs_pos * rs_pos - self.radius * self.radius;
 
         let (t1, t2) = solve_quadratic(a, b, c)?;
 
@@ -105,7 +107,7 @@ impl Sphere {
 
         if distance < min_distance {
             let point = rs + distance * rd;
-            let normal = (point - self.transform.get_pos()).normalize();
+            let normal = (point - pos).normalize();
             Some(Intersection::new(distance, self.material, point, normal))
         } else {
             None
@@ -138,6 +140,7 @@ impl Plane {
 
 impl Plane {
     /// Plane instersector
+    #[inline]
     pub fn intersect(&self, ray: &Ray, min_distance: f64) -> Option<Intersection> {
         let rd = ray.get_dir();
         let rs = ray.get_start();
@@ -208,7 +211,8 @@ impl Triangle {
         let h = rd.prod(edge2);
         let a = edge1 * h;
 
-        if a.abs() < 1e-5 {
+        const EPSILON: f64 = 1e-8;
+        if a.abs() < EPSILON {
             return None;
         }
 
@@ -226,7 +230,7 @@ impl Triangle {
         }
 
         let t = f * edge2 * q;
-        if t > f64::EPSILON && t < min_distance {
+        if t > EPSILON && t < min_distance {
             let point = rs + rd * t;
             Some(Intersection::new(t, self.material, point, self.normal))
         } else {

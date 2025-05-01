@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use rbrt::mods::{
+use rbpt::mods::{
     color::{lerp_color, ColorRBG},
     funcs::{reflect, solve_quadratic},
     position::{lerp, Quat, Vect3},

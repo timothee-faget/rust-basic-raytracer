@@ -6,6 +6,7 @@ Almost everything (vectors, colors, images...) is home made, as this prpject was
 It is right now not very fast, but improvement is on its way!
 
 <img src="images/demo.png" alt="Texte alternatif" width="500"/>
+<img src="images/monkey.png" alt="Texte alternatif" width="500"/>
 <img src="images/old_demo.png" alt="Texte alternatif" width="500"/>
 <img src="images/teapot.png" alt="Texte alternatif" width="500"/>
 <img src="images/teapot_2.png" alt="Texte alternatif" width="500"/>

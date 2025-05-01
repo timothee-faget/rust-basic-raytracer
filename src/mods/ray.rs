@@ -15,11 +15,13 @@ impl Ray {
     }
 
     /// Get Ray start
+    #[inline]
     pub fn get_start(&self) -> Vect3 {
         self.start
     }
 
     /// Get Ray direction
+    #[inline]
     pub fn get_dir(&self) -> Vect3 {
         self.direction
     }
