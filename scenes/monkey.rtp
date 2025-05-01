@@ -1,0 +1,186 @@
+# Camera
+
+camera {
+    position: 0.0 2.75 15.0
+    rotation: 0.0 0.0 1.0 -0.07  # quaternion wxyz
+    focal_length: 5.0
+    fov: 15.0
+}
+
+# Materials 
+
+material {
+  name: mat_teapot
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 0.0 0.5
+  specular_color: 1.0 1.0 1.0
+  emission_strength: 0.0
+  smoothness: 0.3
+  specular_prob: 0.3
+}
+
+material {
+  name: mat_lampe_blanc
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 1.0 1.0
+  specular_color: 1.0 1.0 1.0
+  emission_strength: 1.0
+  smoothness: 1.0
+  specular_prob: 1.0
+}
+
+material {
+  name: mat_lampe_1
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 0.5 0.0
+  specular_color: 1.0 0.5 0.0
+  emission_strength: 1.0
+  smoothness: 1.0
+  specular_prob: 1.0
+}
+
+material {
+  name: mat_lampe_2
+  color: 1.0 1.0 1.0
+  emission_color: 0.0 1.0 0.5
+  specular_color: 0.0 1.0 0.5
+  emission_strength: 1.0
+  smoothness: 1.0
+  specular_prob: 1.0
+}
+
+material {
+  name: mat_lampe_3
+  color: 1.0 1.0 1.0
+  emission_color: 0.0 0.5 1.0
+  specular_color: 0.0 0.5 1.0
+  emission_strength: 1.0
+  smoothness: 1.0
+  specular_prob: 1.0
+}
+
+material {
+  name: mat_lampe_4
+  color: 1.0 1.0 1.0
+  emission_color: 0.5 0.0 1.0
+  specular_color: 0.5 0.0 1.0
+  emission_strength: 1.0
+  smoothness: 1.0
+  specular_prob: 1.0
+}
+
+material {
+  name: mat_sol
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 1.0 1.0
+  specular_color: 1.0 1.0 1.0
+  emission_strength: 0
+  smoothness: 0.0
+  specular_prob: 0.0
+}
+
+material {
+  name: mat_mur_lum
+  color: 1.0 1.0 1.0
+  emission_color: 1.0 1.0 1.0
+  specular_color: 0.2 0.2 0.2
+  emission_strength: 1.0
+  smoothness: 0.2
+  specular_prob: 0.2
+}
+
+plane {
+  point: 0.0 0.0 0.0
+  normal: 0.0 1.0 0.0
+  mat: mat_sol
+}
+
+# Spheres
+
+#sphere {
+#    position: 1.0 10.0 4.0
+#    radius: 4.0
+#    mat: mat_lampe_4
+#}
+
+#sphere {
+#    position: -1.0 10.0 4.0
+#    radius: 4.0
+#    mat: mat_lampe_3
+#}
+
+#sphere {
+#    position: 3.0 11.0 4.0
+#    radius: 4.0
+#    mat: mat_lampe_2
+#}
+
+#sphere {
+#    position: -3.0 11.0 4.0
+#    radius: 4.0
+#    mat: mat_lampe_1
+#}
+
+triangle {
+  point_1: 6.0 5.0 -8.0
+  point_2: 3.0 5.0 8.0
+  point_3: 3.0 5.0 -8.0
+  mat: mat_lampe_3
+}
+
+triangle {
+  point_1: 6.0 5.0 -8.0
+  point_2: 6.0 5.0 8.0
+  point_3: 3.0 5.0 8.0
+  mat: mat_lampe_3
+}
+
+triangle {
+  point_1: 3.0 5.0 -8.0
+  point_2: 0.0 5.0 8.0
+  point_3: 0.0 5.0 -8.0
+  mat: mat_lampe_2
+}
+
+triangle {
+  point_1: 3.0 5.0 -8.0
+  point_2: 3.0 5.0 8.0
+  point_3: 0.0 5.0 8.0
+  mat: mat_lampe_2
+}
+
+triangle {
+  point_1: -3.0 5.0 -8.0
+  point_2: 0.0 5.0 8.0
+  point_3: 0.0 5.0 -8.0
+  mat: mat_lampe_1
+}
+
+triangle {
+  point_1: -3.0 5.0 -8.0
+  point_2: -3.0 5.0 8.0
+  point_3: 0.0 5.0 8.0
+  mat: mat_lampe_1
+}
+
+
+triangle {
+  point_1: -6.0 5.0 -8.0
+  point_2: -3.0 5.0 8.0
+  point_3: -3.0 5.0 -8.0
+  mat: mat_lampe_4
+}
+
+triangle {
+  point_1: -6.0 5.0 -8.0
+  point_2: -6.0 5.0 8.0
+  point_3: -3.0 5.0 8.0
+  mat: mat_lampe_4
+}
+
+mesh {
+  position: 0.0 0.0 0.0
+  rotation: 0.9 0.0 -0.26 0.0
+  obj_file: obj/monkey.obj
+  mat: mat_teapot 
+}
