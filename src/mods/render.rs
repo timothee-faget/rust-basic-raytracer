@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use crate::mods::funcs::s_to_hms;
 
 use super::{
-    color::{lerp_color, ColorRBG, ColorRBGOF},
+    color::{ColorRBG, ColorRBGOF},
     objs::{Camera, Plane, Sphere, Triangle},
     position::lerp,
     random::LCG,
@@ -66,10 +66,10 @@ impl Scene {
         let scene = &self;
         let bar = ProgressBar::new(self.render_iterations as u64);
         bar.set_style(ProgressStyle::default_bar().template(
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} ({percent}%) | ETA: {eta}",
-        ).unwrap().progress_chars("##-"));
-
+            "[{elapsed_precise}] {bar:70.cyan/blue} {pos:>7}/{len:7} ({percent}%) | ETA: {eta}",
+        ).unwrap().progress_chars("█░"));
         bar.inc(0);
+
         for f in 0..self.render_iterations {
             let all_pixels: Vec<(usize, usize)> = (0..width)
                 .flat_map(|x| (0..height).map(move |y| (x, y)))
@@ -101,7 +101,6 @@ impl Scene {
             bar.inc(1);
         }
 
-        //bar.finish_with_message("Rendu terminé!");
         let coeff = 1.0 / self.render_iterations as f64;
         for y in 0..height {
             for x in 0..width {
@@ -120,6 +119,7 @@ impl Scene {
     }
 
     /// Trace ray
+    #[inline]
     pub fn trace(&self, ray: &Ray, randomizer: &mut LCG, bounce: u32) -> ColorRBG {
         if bounce > self.max_bounces {
             return ColorRBG::BLACK;
@@ -127,47 +127,45 @@ impl Scene {
 
         let closest_intersection = self.get_intersection(ray);
 
-        if let Some(inter) = closest_intersection {
-            let is_specular = inter.material.specular_prob >= randomizer.next_f64();
+        match closest_intersection {
+            None => ColorRBG::BLACK,
+            Some(inter) => {
+                let is_specular = inter.material.specular_prob >= randomizer.next_f64();
+                let rd = ray.get_dir();
+                let dot = rd * inter.normal;
 
-            let rd = ray.get_dir();
+                let diffuse_dir = randomizer.next_normal_vect3(inter.normal);
+                let ray_dir = if is_specular {
+                    let specular_dir = (rd - 2.0 * inter.normal * dot).normalize();
+                    lerp(diffuse_dir, specular_dir, inter.material.smoothness)
+                } else {
+                    diffuse_dir
+                };
 
-            let dot = rd * inter.normal;
-            let specular_dir = (rd - 2.0 * inter.normal * dot).normalize();
+                let ray_origin = inter.point + inter.normal * BIAS;
+                let new_ray = Ray::new(ray_origin, ray_dir);
 
-            let diffuse_dir =
-                (inter.normal + randomizer.next_normal_vect3(inter.normal)).normalize();
-            let ray_origin = inter.point + inter.normal * BIAS;
+                let emitted = inter.material.get_emited_light();
 
-            let ray_dir = lerp(
-                diffuse_dir,
-                specular_dir,
-                inter.material.smoothness * (is_specular as u8 as f64),
-            )
-            .normalize();
-            let new_ray = Ray::new(ray_origin, ray_dir);
+                let reflectance = if is_specular {
+                    inter.material.specular_color
+                } else {
+                    inter.material.color
+                };
 
-            let emitted = inter.material.get_emited_light();
+                let p = reflectance.max_component().clamp(0.1, 1.0);
+                if randomizer.next_f64() >= p {
+                    return emitted;
+                }
 
-            let reflectance = lerp_color(
-                inter.material.color,
-                inter.material.specular_color,
-                is_specular as u8 as f64,
-            );
-
-            let p = reflectance.max_component().clamp(0.1, 1.0);
-            if randomizer.next_f64() >= p {
-                return emitted;
+                let next_bounce_light = self.trace(&new_ray, randomizer, bounce + 1);
+                emitted + (1.0 / p) * (reflectance * next_bounce_light)
             }
-
-            let next_bounce_light = self.trace(&new_ray, randomizer, bounce + 1);
-            emitted + (1.0 / p) * (reflectance * next_bounce_light)
-        } else {
-            ColorRBG::BLACK
         }
     }
 
     /// Get Intersection of Ray with Scene's objects
+    #[inline]
     fn get_intersection(&self, ray: &Ray) -> Option<Intersection> {
         let mut closest_intersection: Option<Intersection> = None;
         let mut min_distance = f64::INFINITY;
