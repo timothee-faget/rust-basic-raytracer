@@ -11,6 +11,10 @@ impl LCG {
         LCG { state: seed }
     }
 
+    pub fn set_seed(&mut self, seed: u64) {
+        self.state = seed;
+    }
+
     /// Get next state
     #[inline]
     fn next(&mut self) -> u64 {
